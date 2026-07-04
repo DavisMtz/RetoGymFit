@@ -18,7 +18,6 @@ export const RETOS = {
     fechaFin: '2026-12-13',
     acento: '#d4ff00',
     acentoSecundario: null,
-    webhookEnv: 'VITE_SHEETS_WEBHOOK_MIXTO',
     actividades: [
       { id: 'Gimnasio', nombre: 'Gimnasio', tag: 'Entrenamiento', icono: '🏋️', requiereDatos: true },
       { id: 'Fuera del Gym', nombre: 'Outdoor', tag: 'Fuera del gym', icono: '🏃', requiereDatos: true },
@@ -56,7 +55,6 @@ export const RETOS = {
     fechaFin: '2026-12-13',
     acento: '#d4ff00',
     acentoSecundario: '#ff8fb1',
-    webhookEnv: 'VITE_SHEETS_WEBHOOK_DAMAS',
     actividades: [
       { id: 'Gimnasio', nombre: 'Gimnasio', tag: 'Entrenamiento', icono: '🏋️‍♀️', requiereDatos: true },
       { id: 'Fuera del Gym', nombre: 'Outdoor', tag: 'Fuera del gym', icono: '🏃‍♀️', requiereDatos: true },
