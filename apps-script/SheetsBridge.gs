@@ -1,31 +1,32 @@
 /**
  * PUENTE FIREBASE → GOOGLE SHEETS — RETO GYM 2026
  *
- * Este script vive en la MISMA hoja de cálculo de siempre (una copia por
- * hoja: Mixto y Damas). La app en Firebase le manda cada registro nuevo
- * por HTTP y este script lo agrega a la pestaña "Registros" con el mismo
- * formato de columnas que usaba la app anterior:
+ * UN SOLO script para las DOS hojas (Mixto y Damas): la app en Firebase
+ * manda cada registro nuevo por HTTP y este script lo agrega a la pestaña
+ * "Registros" de la hoja correcta, con el mismo formato de siempre:
  *
  *   A: Timestamp | B: Usuario | C: Fecha | D: Tipo | E: Minutos
  *   F: Kcal      | G: Evidencia | H: Estatus | I: Notas
  *
- * INSTALACIÓN (en cada hoja):
- *  1. Extensiones → Apps Script → pega este archivo.
- *  2. Cambia TOKEN por un valor secreto propio (el mismo que pongas en
- *     VITE_SHEETS_WEBHOOK_TOKEN del .env de la app).
- *  3. Implementar → Nueva implementación → "Aplicación web"
- *       - Ejecutar como: Tú
- *       - Acceso: Cualquier persona
- *  4. Copia la URL del Web App a VITE_SHEETS_WEBHOOK_MIXTO o _DAMAS.
+ * INSTALACIÓN (una sola vez, ~3 minutos):
+ *  1. Entra a https://script.google.com → Nuevo proyecto.
+ *  2. Borra el contenido y pega este archivo completo. Guarda (Ctrl+S).
+ *  3. Implementar → Nueva implementación → tipo "Aplicación web":
+ *       - Ejecutar como: Tú (tu cuenta, dueña de las hojas)
+ *       - Quién tiene acceso: Cualquier persona
+ *  4. Autoriza los permisos cuando lo pida.
+ *  5. Copia la URL del Web App (termina en /exec) y pégasela a Claude
+ *     para conectarla a la app.
  *
- * Nota: el menú ADMIN GYM y el sidebar de pagos de tu script original
- * pueden seguir viviendo en el mismo proyecto sin conflicto. Los pagos
- * ahora se registran también en Firestore (colección `pagos`) para que
- * la app muestre el bote; puedes hacerlo desde la consola de Firebase
- * o adaptar guardarPago() para escribir en ambos lados.
+ * Los IDs de las hojas y el token ya vienen configurados — no cambies nada.
  */
 
-var TOKEN = 'CAMBIA-ESTE-TOKEN';
+var TOKEN = '7ddf4b0e8c45ea15ca556a993ccd1074';
+
+var HOJAS = {
+  mixto: '1E46f6q3q1kLl4E04uX1i3a0HENZpmcOVatDtbd0E8TQ',
+  damas: '1JXd0uyYTzNNgdHuiY-Ndk3Mt5pt_TM5BvswbMGI1zpo',
+};
 
 function doPost(e) {
   var out = { success: false };
@@ -37,9 +38,13 @@ function doPost(e) {
     }
 
     if (body.accion === 'registro') {
+      var sheetId = HOJAS[body.retoId];
+      if (!sheetId) throw new Error('Reto desconocido: ' + body.retoId);
+
       var r = body.registro;
-      var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registros');
-      if (!hoja) throw new Error("No existe la hoja 'Registros'");
+      var ss = SpreadsheetApp.openById(sheetId);
+      var hoja = ss.getSheetByName('Registros');
+      if (!hoja) throw new Error("No existe la pestaña 'Registros' en la hoja " + body.retoId);
 
       // Evitar duplicados si la app reintenta el envío
       var datos = hoja.getDataRange().getValues();
@@ -78,6 +83,15 @@ function doPost(e) {
     out.message = String(err);
   }
   return responder(out);
+}
+
+/** Prueba rápida desde el editor: Ejecutar → probarConexion */
+function probarConexion() {
+  for (var reto in HOJAS) {
+    var ss = SpreadsheetApp.openById(HOJAS[reto]);
+    var hoja = ss.getSheetByName('Registros');
+    Logger.log(reto + ': ' + ss.getName() + ' → pestaña Registros ' + (hoja ? 'OK ✓' : 'NO ENCONTRADA ✗'));
+  }
 }
 
 function responder(obj) {

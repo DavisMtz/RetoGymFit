@@ -3,7 +3,6 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider, TabBar, AnimeIntro } from './components/ui';
 import { drenarCola } from './lib/sheets';
-import { RETOS } from './config/retos';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Historial from './screens/Historial';
@@ -33,7 +32,7 @@ function Shell() {
   // Tema del reto en el body + drenar cola de sincronización a Sheets
   useEffect(() => {
     document.body.dataset.reto = reto?.id || '';
-    if (autenticado) drenarCola(RETOS);
+    if (autenticado) drenarCola();
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;
