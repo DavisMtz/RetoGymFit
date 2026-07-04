@@ -12,7 +12,8 @@ const QUEUE_KEY = 'rgf_sheets_queue_v1';
 
 // URL del Web App de Apps Script (SheetsBridge.gs) y token compartido.
 // Proyecto personal: van integrados en el código; .env los sobreescribe.
-const WEBHOOK_URL = import.meta.env.VITE_SHEETS_WEBHOOK_URL || '';
+const WEBHOOK_URL = import.meta.env.VITE_SHEETS_WEBHOOK_URL
+  || 'https://script.google.com/macros/s/AKfycbx32gTmqgy7vK2wHG2qGZQrRGucRJAW6LD59nh9lE1fND1GiXypf5tG9IVaINOucJ7loA/exec';
 const TOKEN = import.meta.env.VITE_SHEETS_WEBHOOK_TOKEN || '7ddf4b0e8c45ea15ca556a993ccd1074';
 
 function leerCola() {
