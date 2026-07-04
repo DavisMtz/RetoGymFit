@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// ============================================================
+// Reglas de seguridad — RETO GYM 2026
+//
+// Modelo de confianza:
+//  - Cualquier usuario autenticado (incluso anónimo, necesario para el
+//    onboarding) puede LEER: lista de participantes, registros, pagos.
+//  - Un participante solo puede ser "reclamado" una vez: el campo authUid
+//    pasa de null → uid del que reclama, y después solo su dueño lo toca.
+//  - Los registros solo los crea el dueño del perfil, con id determinista
+//    `${usuarioId}_${fecha}` (imposible registrar dos veces el mismo día
+//    o a nombre de otra persona). Nunca se editan ni borran desde la app.
+//  - Pagos y altas/bajas de participantes: solo admin (consola Firebase).
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /retos/{retoId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+
+      match /usuarios/{usuarioId} {
+        allow read: if request.auth != null;
+        allow create, delete: if false;
+        allow update: if request.auth != null
+          // solo campos de sesión, nada más
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso'])
+          // reclamar solo si está libre, o si ya eres el dueño
+          && (!('authUid' in resource.data) || resource.data.authUid == null
+              || resource.data.authUid == request.auth.uid)
+          && request.resource.data.authUid == request.auth.uid;
+      }
+
+      match /registros/{registroId} {
+        allow read: if request.auth != null;
+        allow update, delete: if false;
+        allow create: if request.auth != null
+          // el perfil debe pertenecer a quien escribe
+          && get(/databases/$(database)/documents/retos/$(retoId)/usuarios/$(request.resource.data.usuarioId)).data.authUid == request.auth.uid
+          // id determinista: un registro por persona por día
+          && registroId == request.resource.data.usuarioId + '_' + request.resource.data.fecha
+          // campos mínimos coherentes
+          && request.resource.data.fecha is string
+          && request.resource.data.tipo is string
+          && request.resource.data.estatus in ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO', 'N/A']
+          && request.resource.data.minutos is number
+          && request.resource.data.calorias is number
+          && request.resource.data.minutos >= 0 && request.resource.data.minutos <= 1440
+          && request.resource.data.calorias >= 0 && request.resource.data.calorias <= 20000;
+      }
+
+      match /pagos/{pagoId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+    }
+  }
+}
