@@ -8,7 +8,7 @@
  */
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  setDoc, updateDoc, serverTimestamp,
+  setDoc, updateDoc, deleteField, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX, semanaISO, anioISO, mesMX, diasDeSemana, lunesDe, sumarDias } from '../lib/dates';
@@ -60,6 +60,18 @@ export async function marcarAcceso(retoId, usuarioId, authUid) {
       ultimoAcceso: serverTimestamp(),
     });
   } catch { /* no crítico */ }
+}
+
+/**
+ * Guarda (o quita) la foto de perfil del participante. La foto es un data URL
+ * JPEG comprimido que vive en el propio documento del usuario; pasar `null`
+ * la elimina. Solo el dueño del perfil puede escribirla (ver firestore.rules).
+ */
+export async function actualizarFotoPerfil(retoId, usuarioId, fotoDataUrl) {
+  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), {
+    fotoPerfil: fotoDataUrl == null ? deleteField() : fotoDataUrl,
+    ultimoAcceso: serverTimestamp(),
+  });
 }
 
 // ——————————————————————————————— REGISTROS

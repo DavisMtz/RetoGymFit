@@ -19,7 +19,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { getReto } from '../config/retos';
-import { obtenerUsuario, reclamarUsuario, marcarAcceso } from '../data/queries';
+import { obtenerUsuario, reclamarUsuario, marcarAcceso, actualizarFotoPerfil } from '../data/queries';
 
 const SESSION_KEY = 'rgf_session_v1';
 const AuthContext = createContext(null);
@@ -122,6 +122,13 @@ export function AuthProvider({ children }) {
     await updatePassword(auth.currentUser, nueva);
   }, []);
 
+  /** Guarda o quita la foto de perfil (data URL) y refresca el estado local */
+  const actualizarFoto = useCallback(async (fotoDataUrl) => {
+    if (!sesion || !usuario) throw new Error('Sin sesión');
+    await actualizarFotoPerfil(sesion.retoId, usuario.id, fotoDataUrl);
+    setUsuario((u) => (u ? { ...u, fotoPerfil: fotoDataUrl || null } : u));
+  }, [sesion, usuario]);
+
   const value = {
     cargando,
     autenticado: Boolean(usuario && reto),
@@ -131,6 +138,7 @@ export function AuthProvider({ children }) {
     iniciarSesion,
     cerrarSesion,
     cambiarPassword,
+    actualizarFoto,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

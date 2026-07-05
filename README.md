@@ -25,6 +25,7 @@ retos/{retoId}                        # 'mixto' | 'damas'
 │     authUid: null | "<uid>"         # se llena al crear contraseña
 │     hasPassword: bool
 │     ultimoAcceso: timestamp
+│     fotoPerfil?: string             # data URL JPEG (avatar) que sube el dueño desde Perfil
 │
 ├── registros/{usuarioId}_{fecha}     # id determinista ⇒ 1 registro/día
 │     usuarioId, nombre
