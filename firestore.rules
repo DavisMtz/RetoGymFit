@@ -23,8 +23,21 @@ service cloud.firestore {
 
       match /usuarios/{usuarioId} {
         allow read: if request.auth != null;
-        allow create, delete: if false;
+        allow delete: if false;
+        // Los participantes viven en la pestaña "Usuarios" del Google Sheet;
+        // su documento en Firestore se crea al reclamar el perfil (primera
+        // contraseña). Solo puedes crear un doc que te pertenezca a ti.
+        allow create: if request.auth != null
+          // reclamar exige cuenta con contraseña (las anónimas no tienen email)
+          && request.auth.token.email != null
+          && request.resource.data.authUid == request.auth.uid
+          && request.resource.data.hasPassword == true
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() >= 2
+          && request.resource.data.nombre.size() <= 80
+          && request.resource.data.estado == 'Activo';
         allow update: if request.auth != null
+          && request.auth.token.email != null
           // solo campos de sesión, nada más
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso'])
@@ -42,14 +55,20 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/retos/$(retoId)/usuarios/$(request.resource.data.usuarioId)).data.authUid == request.auth.uid
           // id determinista: un registro por persona por día
           && registroId == request.resource.data.usuarioId + '_' + request.resource.data.fecha
-          // campos mínimos coherentes
+          // campos mínimos coherentes; fecha real para que nadie infle el ranking
           && request.resource.data.fecha is string
+          && request.resource.data.fecha.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           && request.resource.data.tipo is string
+          && request.resource.data.tipo.size() <= 40
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() <= 80
           && request.resource.data.estatus in ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO', 'N/A']
           && request.resource.data.minutos is number
           && request.resource.data.calorias is number
           && request.resource.data.minutos >= 0 && request.resource.data.minutos <= 1440
-          && request.resource.data.calorias >= 0 && request.resource.data.calorias <= 20000;
+          && request.resource.data.calorias >= 0 && request.resource.data.calorias <= 20000
+          && request.resource.data.notas is string
+          && request.resource.data.notas.size() <= 500;
       }
 
       match /pagos/{pagoId} {

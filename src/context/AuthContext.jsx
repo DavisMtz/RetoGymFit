@@ -87,10 +87,12 @@ export function AuthProvider({ children }) {
     let user;
     if (auth.currentUser?.isAnonymous) {
       ({ user } = await linkWithCredential(auth.currentUser, cred));
+      // refrescar el token para que las reglas vean el email ya vinculado
+      await user.getIdToken(true);
     } else {
       ({ user } = await createUserWithEmailAndPassword(auth, email, password));
     }
-    await reclamarUsuario(retoId, usuarioDoc.id, user.uid);
+    await reclamarUsuario(retoId, usuarioDoc, user.uid);
     const s = { retoId, usuarioId: usuarioDoc.id };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
     setFirebaseUser(user);

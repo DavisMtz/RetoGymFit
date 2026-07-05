@@ -46,6 +46,28 @@ export async function sincronizarRegistro(reto, registro) {
   }
 }
 
+/**
+ * Lee los participantes de la pestaña "Usuarios" del Sheet del reto.
+ * La hoja es la fuente viva: das de alta/baja gente editándola.
+ */
+export async function obtenerUsuariosSheet(retoId) {
+  if (!WEBHOOK_URL) throw new Error('Sin webhook configurado');
+  const res = await fetch(`${WEBHOOK_URL}?accion=usuarios&token=${TOKEN}`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || 'Error al leer la hoja');
+  return data.usuarios[retoId] || [];
+}
+
+/** Slug estable de un nombre → id de documento ('Alexa Bautista' → 'alexa-bautista') */
+export function slugNombre(nombre) {
+  return nombre
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 /** Reintenta lo pendiente (llamar al arrancar la app) */
 export async function drenarCola() {
   if (!WEBHOOK_URL) return;
