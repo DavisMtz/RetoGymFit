@@ -89,7 +89,21 @@ node scripts/migrar.mjs --reto damas --usuarios usuarias.csv --registros registr
 3. Implementar → Aplicación web → *Ejecutar como: tú* / *Acceso: cualquier persona* → copia la URL.
 4. En `.env`: `VITE_SHEETS_WEBHOOK_MIXTO`, `VITE_SHEETS_WEBHOOK_DAMAS` y `VITE_SHEETS_WEBHOOK_TOKEN`.
 
-Cada registro guardado en Firestore se replica a la pestaña `Registros` con las mismas columnas de siempre. Si el teléfono está sin señal, queda en una cola local y se reenvía al abrir la app. **Firestore es la fuente de verdad**; la hoja es la réplica.
+Cada registro guardado en la app se replica a la pestaña `Registros` con las mismas columnas de siempre. Si el teléfono está sin señal, queda en una cola local y se reenvía al abrir la app.
+
+### Espejo Google Sheets → Firebase (bidireccional)
+
+**Google Sheets es la interfaz de administración** (editas participantes, corriges registros, capturas pagos a mano) y **Firebase es el espejo veloz** que hace la app fluida. El mismo `SheetsBridge.gs` mantiene el espejo:
+
+- `configurarEspejo()` — ejecútala una vez desde el editor de Apps Script: importa todo (usuarios, registros, pagos) a Firestore e instala los triggers.
+- **Trigger onEdit** en ambas hojas → cada cambio manual se espeja al instante.
+- **Trigger cada 15 min** → red de seguridad que reconcilia todo.
+
+Escribe en Firestore con la cuenta de servicio `admin-sync@retogymfit.app` (el único uid con permiso de escritura total según `firestore.rules`). El sync de usuarios usa `updateMask` para no pisar `authUid`/`hasPassword` que fija la app al reclamar perfil.
+
+Flujo de datos:
+- **App → Firestore** (instantáneo, para fluidez) **y → Sheets** (webhook).
+- **Sheets → Firestore** (espejo onEdit + cada 15 min).
 
 ### 6. Publicar
 ```bash
