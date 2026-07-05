@@ -2,15 +2,19 @@
  * Perfil: identidad del atleta, días justificados disponibles,
  * cambio de contraseña y cierre de sesión.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, getInitials, Header, StatusStrip } from '../components/ui';
+import { useToast, vibrate, Avatar, Header, StatusStrip } from '../components/ui';
 import { obtenerHistorial, contarPorTipo } from '../data/queries';
+import { subirAvatar } from '../lib/avatar';
 import { calcularRacha } from '../lib/dates';
 
 export default function Perfil() {
-  const { reto, usuario, cerrarSesion, cambiarPassword } = useAuth();
+  const { reto, usuario, cerrarSesion, cambiarPassword, refrescarUsuario } = useAuth();
   const toast = useToast();
+  const fileRef = useRef();
+  const [foto, setFoto] = useState(usuario.photoURL || null);
+  const [subiendo, setSubiendo] = useState(false);
   const [racha, setRacha] = useState(0);
   const [totalDias, setTotalDias] = useState(0);
   const [vacaciones, setVacaciones] = useState(null);
@@ -66,7 +70,38 @@ export default function Perfil() {
       <StatusStrip />
 
       <section className="profile-hero">
-        <div className="profile-av">{getInitials(usuario.nombre)}</div>
+        <button
+          type="button"
+          className="profile-av-btn"
+          onClick={() => { if (!subiendo) fileRef.current?.click(); }}
+          aria-label="Cambiar foto de perfil"
+        >
+          <Avatar nombre={usuario.nombre} url={foto} className="profile-av" />
+          <span className="profile-av-edit">{subiendo ? '…' : '📷'}</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            setSubiendo(true);
+            vibrate();
+            try {
+              const url = await subirAvatar(reto.id, usuario.id, file);
+              setFoto(url);
+              refrescarUsuario?.({ photoURL: url });
+              toast('Foto actualizada ✓');
+            } catch {
+              toast('No se pudo subir la foto. Intenta otra.', true);
+            } finally {
+              setSubiendo(false);
+            }
+          }}
+        />
         <h1 className="profile-name">{usuario.nombre}</h1>
         <div className="profile-reto">{reto.nombre} · {reto.subtitulo}</div>
         <div className="profile-badges">

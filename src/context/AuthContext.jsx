@@ -122,6 +122,11 @@ export function AuthProvider({ children }) {
     await updatePassword(auth.currentUser, nueva);
   }, []);
 
+  // Actualiza campos del participante en memoria (p. ej. photoURL tras subir foto)
+  const refrescarUsuario = useCallback((campos) => {
+    setUsuario((u) => (u ? { ...u, ...campos } : u));
+  }, []);
+
   const value = {
     cargando,
     autenticado: Boolean(usuario && reto),
@@ -131,6 +136,7 @@ export function AuthProvider({ children }) {
     iniciarSesion,
     cerrarSesion,
     cambiarPassword,
+    refrescarUsuario,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

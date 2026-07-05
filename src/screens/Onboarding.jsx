@@ -10,7 +10,7 @@ import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos } from '../data/queries';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
-import { getInitials, vibrate, useToast } from '../components/ui';
+import { getInitials, Avatar, vibrate, useToast } from '../components/ui';
 
 const IconSearch = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
@@ -78,6 +78,7 @@ export default function Onboarding() {
               estado: 'Activo',
               hasPassword: docFS?.hasPassword || false,
               authUid: docFS?.authUid || null,
+              photoURL: docFS?.photoURL || null,
             };
           })
           .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
@@ -172,7 +173,7 @@ export default function Onboarding() {
               style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}
               onClick={() => { vibrate(); setElegido(u); setPass(''); setPass2(''); setError(''); setPaso(3); }}
             >
-              <div className="person-av">{getInitials(u.nombre)}</div>
+              <Avatar nombre={u.nombre} url={u.photoURL} className="person-av" />
               <div className="person-info">
                 <b>{u.nombre}</b>
                 <span>{u.hasPassword ? 'Cuenta activa' : 'Primera vez · sin contraseña'}</span>
