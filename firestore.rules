@@ -46,13 +46,18 @@ service cloud.firestore {
           && request.resource.data.estado == 'Activo';
         allow update: if request.auth != null
           && request.auth.token.email != null
-          // solo campos de sesión, nada más
+          // solo campos de sesión y la foto de perfil, nada más
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso'])
+               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'fotoPerfil'])
           // reclamar solo si está libre, o si ya eres el dueño
           && (!('authUid' in resource.data) || resource.data.authUid == null
               || resource.data.authUid == request.auth.uid)
-          && request.resource.data.authUid == request.auth.uid;
+          && request.resource.data.authUid == request.auth.uid
+          // la foto (si viene) es la URL de descarga del avatar en Storage:
+          // string corto y acotado para evitar abusos
+          && (!('fotoPerfil' in request.resource.data)
+              || (request.resource.data.fotoPerfil is string
+                  && request.resource.data.fotoPerfil.size() <= 2000));
       }
 
       match /registros/{registroId} {

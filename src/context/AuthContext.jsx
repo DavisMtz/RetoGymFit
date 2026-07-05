@@ -19,7 +19,8 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { getReto } from '../config/retos';
-import { obtenerUsuario, reclamarUsuario, marcarAcceso } from '../data/queries';
+import { obtenerUsuario, reclamarUsuario, marcarAcceso, actualizarFotoPerfil } from '../data/queries';
+import { subirFoto, borrarFoto } from '../lib/fotos';
 
 const SESSION_KEY = 'rgf_session_v1';
 const AuthContext = createContext(null);
@@ -122,6 +123,28 @@ export function AuthProvider({ children }) {
     await updatePassword(auth.currentUser, nueva);
   }, []);
 
+  /**
+   * Guarda o quita la foto de perfil. Recibe un Blob (lo sube a Storage y
+   * guarda su URL de descarga en Firestore) o `null` para eliminarla.
+   * Refresca el estado local para que la UI cambie al instante.
+   */
+  const actualizarFoto = useCallback(async (blob) => {
+    if (!sesion || !usuario) throw new Error('Sin sesión');
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('Sin sesión');
+    if (blob) {
+      const url = await subirFoto(uid, blob);
+      await actualizarFotoPerfil(sesion.retoId, usuario.id, url);
+      setUsuario((u) => (u ? { ...u, fotoPerfil: url } : u));
+    } else {
+      // Firestore es la fuente de verdad de lo que ve la app; si se limpia,
+      // la foto ya desapareció. Borrar el objeto en Storage es best-effort.
+      await actualizarFotoPerfil(sesion.retoId, usuario.id, null);
+      try { await borrarFoto(uid); } catch { /* huérfano tolerable */ }
+      setUsuario((u) => (u ? { ...u, fotoPerfil: null } : u));
+    }
+  }, [sesion, usuario]);
+
   const value = {
     cargando,
     autenticado: Boolean(usuario && reto),
@@ -131,6 +154,7 @@ export function AuthProvider({ children }) {
     iniciarSesion,
     cerrarSesion,
     cambiarPassword,
+    actualizarFoto,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
