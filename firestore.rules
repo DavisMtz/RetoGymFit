@@ -52,7 +52,12 @@ service cloud.firestore {
           // reclamar solo si está libre, o si ya eres el dueño
           && (!('authUid' in resource.data) || resource.data.authUid == null
               || resource.data.authUid == request.auth.uid)
-          && request.resource.data.authUid == request.auth.uid;
+          && request.resource.data.authUid == request.auth.uid
+          // la foto (si viene) es la URL de descarga del avatar en Storage:
+          // string corto y acotado para evitar abusos
+          && (!('fotoPerfil' in request.resource.data)
+              || (request.resource.data.fotoPerfil is string
+                  && request.resource.data.fotoPerfil.size() <= 2000));
       }
 
       match /registros/{registroId} {

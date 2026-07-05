@@ -25,6 +25,7 @@ retos/{retoId}                        # 'mixto' | 'damas'
 │     authUid: null | "<uid>"         # se llena al crear contraseña
 │     hasPassword: bool
 │     ultimoAcceso: timestamp
+│     fotoPerfil?: string             # URL de descarga del avatar en Storage (avatares/{authUid}/perfil.jpg)
 │
 ├── registros/{usuarioId}_{fecha}     # id determinista ⇒ 1 registro/día
 │     usuarioId, nombre
@@ -59,7 +60,8 @@ retos/{retoId}                        # 'mixto' | 'damas'
 1. [Firebase Console](https://console.firebase.google.com) → nuevo proyecto.
 2. **Authentication** → Sign-in method → habilita **Anonymous** y **Email/Password**.
 3. **Firestore Database** → crear (production mode).
-4. Project settings → Your apps → Web app → copia la config.
+4. **Storage** → *Get started* (guarda las fotos de perfil). En proyectos creados desde finales de 2024 Storage exige el plan **Blaze** (pago por uso); un avatar pesa ~30–150 KB, el consumo es mínimo.
+5. Project settings → Your apps → Web app → copia la config.
 
 ### 2. Configurar y correr la app
 ```bash
@@ -72,8 +74,9 @@ npm run dev
 ```bash
 npm install -g firebase-tools
 firebase login && firebase use <tu-proyecto>
-firebase deploy --only firestore
+firebase deploy --only firestore,storage
 ```
+Esto sube las reglas de Firestore (`firestore.rules`), los índices y las reglas de Storage (`storage.rules`) que autorizan a cada quien a subir su propio avatar.
 
 ### 4. Migrar los datos de tus hojas
 Exporta a CSV las pestañas **Usuarios**, **Registros** y **Pagos** de cada hoja, descarga una clave de servicio (Project settings → Service accounts) como `serviceAccount.json` y:

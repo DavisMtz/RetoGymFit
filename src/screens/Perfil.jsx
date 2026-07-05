@@ -64,6 +64,42 @@ export default function Perfil() {
     }
   }
 
+  function elegirFoto() {
+    if (subiendoFoto) return;
+    vibrate();
+    fileRef.current?.click();
+  }
+
+  async function onFotoSeleccionada(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-elegir el mismo archivo
+    if (!file) return;
+    setSubiendoFoto(true);
+    try {
+      const blob = await comprimirFoto(file);
+      await actualizarFoto(blob);
+      vibrate([30, 40, 30]);
+      toast('Foto de perfil actualizada ✓');
+    } catch (err) {
+      toast(err?.message || 'No se pudo actualizar la foto.', true);
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
+  async function quitarFoto() {
+    setModalQuitarFoto(false);
+    setSubiendoFoto(true);
+    try {
+      await actualizarFoto(null);
+      toast('Foto eliminada');
+    } catch {
+      toast('No se pudo quitar la foto.', true);
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Header reto={reto} />
@@ -136,6 +172,22 @@ export default function Perfil() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Cuenta</h2></div>
+        <button className="pref-row" type="button" onClick={elegirFoto} disabled={subiendoFoto}>
+          <span className="pr-icon">📷</span>
+          <span className="pr-text">
+            {usuario.fotoPerfil ? 'Cambiar foto de perfil' : 'Añadir foto de perfil'}
+            <span className="pr-sub">{subiendoFoto ? 'Procesando imagen…' : 'También puedes tocar tu avatar'}</span>
+          </span>
+        </button>
+        {usuario.fotoPerfil && (
+          <button className="pref-row" type="button" onClick={() => { vibrate(); setModalQuitarFoto(true); }} disabled={subiendoFoto}>
+            <span className="pr-icon">🗑️</span>
+            <span className="pr-text">
+              Quitar foto
+              <span className="pr-sub">Vuelve a mostrar tus iniciales</span>
+            </span>
+          </button>
+        )}
         <button className="pref-row" type="button" onClick={() => { vibrate(); setModalPass(true); setError(''); }}>
           <span className="pr-icon">🔑</span>
           <span className="pr-text">
@@ -168,6 +220,16 @@ export default function Perfil() {
             <button className="btn-dark" type="submit" disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar'}</button>
             <button className="btn-secondary" type="button" onClick={() => setModalPass(false)}>Cancelar</button>
           </form>
+        </div>
+      </div>
+
+      {/* Modal quitar foto */}
+      <div className={`modal-overlay ${modalQuitarFoto ? 'show' : ''}`}>
+        <div className="modal">
+          <h2>¿Quitar tu foto?</h2>
+          <p>Volverás a mostrar tus iniciales. Puedes añadir otra cuando quieras.</p>
+          <button className="btn-dark" type="button" onClick={quitarFoto}>Sí, quitar foto</button>
+          <button className="btn-secondary" type="button" onClick={() => setModalQuitarFoto(false)}>Cancelar</button>
         </div>
       </div>
 
