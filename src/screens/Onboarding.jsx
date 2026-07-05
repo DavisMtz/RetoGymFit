@@ -8,6 +8,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos } from '../data/queries';
+import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
 import { getInitials, vibrate, useToast } from '../components/ui';
 
@@ -47,13 +48,41 @@ export default function Onboarding() {
     document.body.dataset.reto = reto?.id || '';
   }, [reto]);
 
-  // Cargar participantes activos al elegir reto
+  // Cargar participantes al elegir reto. La fuente principal es la pestaña
+  // "Usuarios" del Google Sheet (la administras ahí); Firestore aporta quién
+  // ya tiene contraseña. Si la hoja no responde, usamos solo Firestore.
   useEffect(() => {
     if (!reto) return;
     setUsuarios(null);
-    obtenerUsuariosActivos(reto.id)
-      .then(setUsuarios)
-      .catch(() => { toast('No pude cargar la lista. Revisa tu conexión.', true); setUsuarios([]); });
+    (async () => {
+      const [deSheet, deFirestore] = await Promise.all([
+        obtenerUsuariosSheet(reto.id).catch(() => null),
+        obtenerUsuariosActivos(reto.id).catch(() => []),
+      ]);
+      if (deSheet === null && !deFirestore.length) {
+        toast('No pude cargar la lista. Revisa tu conexión.', true);
+        setUsuarios([]);
+        return;
+      }
+      if (deSheet === null) { setUsuarios(deFirestore); return; }
+      const porId = Object.fromEntries(deFirestore.map((d) => [d.id, d]));
+      setUsuarios(
+        deSheet
+          .filter((u) => u.estado === 'Activo')
+          .map((u) => {
+            const id = slugNombre(u.nombre);
+            const docFS = porId[id];
+            return {
+              id,
+              nombre: u.nombre,
+              estado: 'Activo',
+              hasPassword: docFS?.hasPassword || false,
+              authUid: docFS?.authUid || null,
+            };
+          })
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+      );
+    })();
   }, [reto, toast]);
 
   const filtrados = useMemo(() => {

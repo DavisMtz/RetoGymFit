@@ -28,6 +28,48 @@ var HOJAS = {
   damas: '1JXd0uyYTzNNgdHuiY-Ndk3Mt5pt_TM5BvswbMGI1zpo',
 };
 
+/**
+ * GET ?accion=usuarios&token=... → lee la pestaña "Usuarios" (Col A: Nombre,
+ * Col B: Estado) de las dos hojas. La app usa esto para el buscador del
+ * onboarding: administras a los participantes directamente en tu Sheet.
+ */
+function doGet(e) {
+  var out = { success: false };
+  try {
+    var p = (e && e.parameter) || {};
+    if (p.token !== TOKEN) {
+      out.message = 'Token inválido';
+      return responder(out);
+    }
+    if (p.accion === 'usuarios') {
+      var res = {};
+      for (var reto in HOJAS) {
+        var ss = SpreadsheetApp.openById(HOJAS[reto]);
+        var hoja = ss.getSheetByName('Usuarios');
+        var lista = [];
+        if (hoja && hoja.getLastRow() > 1) {
+          var datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getValues();
+          for (var i = 0; i < datos.length; i++) {
+            if (datos[i][0]) {
+              lista.push({
+                nombre: String(datos[i][0]).trim(),
+                estado: String(datos[i][1] || '').trim(),
+              });
+            }
+          }
+        }
+        res[reto] = lista;
+      }
+      out = { success: true, usuarios: res };
+    } else {
+      out.message = 'Acción desconocida';
+    }
+  } catch (err) {
+    out.message = String(err);
+  }
+  return responder(out);
+}
+
 function doPost(e) {
   var out = { success: false };
   try {

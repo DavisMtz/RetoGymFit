@@ -285,7 +285,7 @@ export default function Hoy() {
 
             <div className="field">
               <label className="field-label">Notas (opcional)</label>
-              <textarea rows="2" placeholder="¿Algún récord, sensación o detalle?" value={notas} onChange={(e) => setNotas(e.target.value)} />
+              <textarea rows="2" maxLength="500" placeholder="¿Algún récord, sensación o detalle?" value={notas} onChange={(e) => setNotas(e.target.value)} />
             </div>
 
             {actividad?.requiereDatos && (
