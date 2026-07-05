@@ -63,13 +63,14 @@ export async function marcarAcceso(retoId, usuarioId, authUid) {
 }
 
 /**
- * Guarda (o quita) la foto de perfil del participante. La foto es un data URL
- * JPEG comprimido que vive en el propio documento del usuario; pasar `null`
- * la elimina. Solo el dueño del perfil puede escribirla (ver firestore.rules).
+ * Guarda (o quita) la URL de la foto de perfil del participante. La imagen
+ * vive en Firebase Storage; aquí sólo guardamos su URL de descarga en el
+ * documento del usuario. Pasar `null` limpia el campo. Solo el dueño del
+ * perfil puede escribirlo (ver firestore.rules).
  */
-export async function actualizarFotoPerfil(retoId, usuarioId, fotoDataUrl) {
+export async function actualizarFotoPerfil(retoId, usuarioId, fotoUrl) {
   await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), {
-    fotoPerfil: fotoDataUrl == null ? deleteField() : fotoDataUrl,
+    fotoPerfil: fotoUrl == null ? deleteField() : fotoUrl,
     ultimoAcceso: serverTimestamp(),
   });
 }

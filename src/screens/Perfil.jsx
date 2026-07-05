@@ -76,8 +76,8 @@ export default function Perfil() {
     if (!file) return;
     setSubiendoFoto(true);
     try {
-      const dataUrl = await comprimirFoto(file);
-      await actualizarFoto(dataUrl);
+      const blob = await comprimirFoto(file);
+      await actualizarFoto(blob);
       vibrate([30, 40, 30]);
       toast('Foto de perfil actualizada ✓');
     } catch (err) {

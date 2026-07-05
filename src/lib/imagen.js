@@ -1,15 +1,14 @@
 /**
  * Utilidades de imagen para la foto de perfil.
  *
- * La foto se guarda como data URL (JPEG comprimido) dentro del documento del
- * participante en Firestore — sin Firebase Storage, para mantener la app
- * offline-first y sin depender del plan Blaze. Por eso comprimimos fuerte en
- * el cliente: recorte cuadrado centrado + escala a ≤ LADO_MAX px, y bajamos la
- * calidad hasta que el data URL quepa holgado bajo el límite de 1 MB por doc.
+ * La foto se sube a Firebase Storage, así que aquí sólo la preparamos:
+ * recorte cuadrado centrado + escala a ≤ LADO_MAX px + JPEG, bajando la
+ * calidad hasta que el archivo quede ligero (subida rápida y menos consumo).
+ * Devolvemos un Blob listo para `uploadBytes`.
  */
 
-const LADO_MAX = 320;        // px del lado del avatar cuadrado
-const OBJETIVO_BYTES = 120000; // ~120 KB de data URL (muy por debajo del doc)
+const LADO_MAX = 320;          // px del lado del avatar cuadrado
+const OBJETIVO_BYTES = 150000; // ~150 KB por foto
 const CALIDAD_MIN = 0.5;
 
 function leerArchivo(file) {
@@ -30,9 +29,19 @@ function cargarImagen(src) {
   });
 }
 
+function canvasABlob(canvas, calidad) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('No se pudo procesar la imagen.'))),
+      'image/jpeg',
+      calidad,
+    );
+  });
+}
+
 /**
- * Recibe un File de imagen y devuelve un data URL JPEG cuadrado y ligero,
- * listo para guardar en Firestore.
+ * Recibe un File de imagen y devuelve un Blob JPEG cuadrado y ligero,
+ * listo para subir a Firebase Storage.
  */
 export async function comprimirFoto(file) {
   if (!file || !file.type?.startsWith('image/')) {
@@ -56,10 +65,10 @@ export async function comprimirFoto(file) {
 
   // Bajamos calidad hasta caber bajo el objetivo
   let calidad = 0.85;
-  let salida = canvas.toDataURL('image/jpeg', calidad);
-  while (salida.length > OBJETIVO_BYTES && calidad > CALIDAD_MIN) {
+  let blob = await canvasABlob(canvas, calidad);
+  while (blob.size > OBJETIVO_BYTES && calidad > CALIDAD_MIN) {
     calidad -= 0.1;
-    salida = canvas.toDataURL('image/jpeg', calidad);
+    blob = await canvasABlob(canvas, calidad);
   }
-  return salida;
+  return blob;
 }

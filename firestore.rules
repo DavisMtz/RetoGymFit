@@ -53,11 +53,11 @@ service cloud.firestore {
           && (!('authUid' in resource.data) || resource.data.authUid == null
               || resource.data.authUid == request.auth.uid)
           && request.resource.data.authUid == request.auth.uid
-          // la foto (si viene) es un data URL acotado: cabe holgado bajo el
-          // límite de 1 MB por documento y evita abusos de tamaño
+          // la foto (si viene) es la URL de descarga del avatar en Storage:
+          // string corto y acotado para evitar abusos
           && (!('fotoPerfil' in request.resource.data)
               || (request.resource.data.fotoPerfil is string
-                  && request.resource.data.fotoPerfil.size() <= 350000));
+                  && request.resource.data.fotoPerfil.size() <= 2000));
       }
 
       match /registros/{registroId} {
