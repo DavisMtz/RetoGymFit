@@ -3,8 +3,8 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, getInitials, Header, StatusStrip, RankSkeleton } from '../components/ui';
-import { obtenerRankingSemanal, obtenerRankingMensual, obtenerBote, obtenerActividadReciente } from '../data/queries';
+import { useToast, vibrate, Avatar, Header, StatusStrip, RankSkeleton } from '../components/ui';
+import { obtenerRankingSemanal, obtenerRankingMensual, obtenerBote, obtenerActividadReciente, obtenerUsuariosActivos } from '../data/queries';
 import { hoyMX, semanaISO } from '../lib/dates';
 
 export default function Ranking() {
@@ -15,18 +15,21 @@ export default function Ranking() {
   const [rankingMes, setRankingMes] = useState(null);
   const [bote, setBote] = useState(null);
   const [ticker, setTicker] = useState([]);
+  const [fotos, setFotos] = useState({}); // usuarioId → photoURL
   const [girando, setGirando] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
-      const [sem, b, act] = await Promise.all([
+      const [sem, b, act, usuarios] = await Promise.all([
         obtenerRankingSemanal(reto),
         obtenerBote(reto.id),
         obtenerActividadReciente(reto.id),
+        obtenerUsuariosActivos(reto.id),
       ]);
       setRanking(sem);
       setBote(b);
       setTicker(act);
+      setFotos(Object.fromEntries(usuarios.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));
     } catch {
       toast('Error al cargar el ranking', true);
       setRanking([]);
@@ -93,7 +96,7 @@ export default function Ranking() {
               style={{ animationDelay: `${Math.min(i * 0.06, 0.5)}s` }}
             >
               <div className="rank-pos">{i + 1}</div>
-              <div className="rank-av">{getInitials(r.nombre)}</div>
+              <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="rank-av" />
               <div className="rank-info">
                 <div className="rank-name">{r.nombre}</div>
                 <div className="rank-cal">

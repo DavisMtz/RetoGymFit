@@ -10,6 +10,22 @@ export function getInitials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((n) => n[0]).join('').toUpperCase();
 }
 
+/** Avatar: muestra la foto de perfil si existe, o las iniciales como respaldo.
+ *  Aplica className para heredar el tamaño/estilo del contexto (rank-av, etc.). */
+export function Avatar({ nombre, url, className = '', style }) {
+  if (url) {
+    return (
+      <div
+        className={className}
+        style={{ ...style, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        role="img"
+        aria-label={nombre}
+      />
+    );
+  }
+  return <div className={className} style={style}>{getInitials(nombre)}</div>;
+}
+
 // ——————————————————————————————— Toast
 
 const ToastContext = createContext(() => {});

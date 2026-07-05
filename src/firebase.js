@@ -24,5 +24,4 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
 });
 
-// Cloud Storage: guarda las fotos de perfil (el bucket vive en storageBucket).
 export const storage = getStorage(app);
