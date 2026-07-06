@@ -8,7 +8,7 @@
  */
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  setDoc, updateDoc, deleteField, serverTimestamp,
+  setDoc, updateDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX, semanaISO, anioISO, mesMX, diasDeSemana, lunesDe, sumarDias } from '../lib/dates';
@@ -60,19 +60,6 @@ export async function marcarAcceso(retoId, usuarioId, authUid) {
       ultimoAcceso: serverTimestamp(),
     });
   } catch { /* no crítico */ }
-}
-
-/**
- * Guarda (o quita) la URL de la foto de perfil del participante. La imagen
- * vive en Firebase Storage; aquí sólo guardamos su URL de descarga en el
- * documento del usuario. Pasar `null` limpia el campo. Solo el dueño del
- * perfil puede escribirlo (ver firestore.rules).
- */
-export async function actualizarFotoPerfil(retoId, usuarioId, fotoUrl) {
-  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), {
-    fotoPerfil: fotoUrl == null ? deleteField() : fotoUrl,
-    ultimoAcceso: serverTimestamp(),
-  });
 }
 
 // ——————————————————————————————— REGISTROS

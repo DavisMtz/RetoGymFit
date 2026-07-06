@@ -19,8 +19,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { getReto } from '../config/retos';
-import { obtenerUsuario, reclamarUsuario, marcarAcceso, actualizarFotoPerfil } from '../data/queries';
-import { subirFoto, borrarFoto } from '../lib/fotos';
+import { obtenerUsuario, reclamarUsuario, marcarAcceso } from '../data/queries';
 
 const SESSION_KEY = 'rgf_session_v1';
 const AuthContext = createContext(null);

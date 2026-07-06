@@ -3,8 +3,8 @@
  * la sube a Cloud Storage en avatars/{uid} y guarda la URL en el documento
  * del participante (usuarios/{id}.photoURL).
  */
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { auth, db, storage } from '../firebase';
 
 const MAX_LADO = 320; // px — suficiente para avatares nítidos y ligeros
@@ -40,4 +40,15 @@ export async function subirAvatar(retoId, usuarioId, file) {
   const url = await getDownloadURL(avatarRef);
   await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { photoURL: url });
   return url;
+}
+
+/** Quita el avatar: borra el archivo en Storage y limpia photoURL. */
+export async function borrarAvatar(retoId, usuarioId) {
+  if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Sin sesión');
+  try {
+    await deleteObject(ref(storage, `avatars/${auth.currentUser.uid}`));
+  } catch (err) {
+    if (err?.code !== 'storage/object-not-found') throw err;
+  }
+  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { photoURL: deleteField() });
 }

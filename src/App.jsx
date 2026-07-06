@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider, TabBar, AnimeIntro } from './components/ui';
 import { drenarCola } from './lib/sheets';
@@ -20,6 +20,7 @@ function Boot() {
 
 function Shell() {
   const { cargando, autenticado, reto, usuario } = useAuth();
+  const location = useLocation();
   const [intro, setIntro] = useState(false);
   const previo = useRef(autenticado);
 
@@ -41,14 +42,17 @@ function Shell() {
   return (
     <>
       {intro && <AnimeIntro nombre={usuario.nombre} genero={reto.genero} onDone={() => setIntro(false)} />}
-      <Routes>
-        <Route path="/" element={<Hoy />} />
-        <Route path="/historial" element={<Historial />} />
-        <Route path="/ranking" element={<Ranking />} />
-        <Route path="/stats" element={<Stats />} />
-        <Route path="/perfil" element={<Perfil />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {/* key por ruta: cada pantalla entra con su transición */}
+      <div className="page-transition" key={location.pathname}>
+        <Routes location={location}>
+          <Route path="/" element={<Hoy />} />
+          <Route path="/historial" element={<Historial />} />
+          <Route path="/ranking" element={<Ranking />} />
+          <Route path="/stats" element={<Stats />} />
+          <Route path="/perfil" element={<Perfil />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
       <TabBar />
     </>
   );
