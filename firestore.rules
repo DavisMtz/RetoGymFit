@@ -91,6 +91,67 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow write: if esAdmin();
       }
+
+      // ——— Feed social: publicaciones con texto/foto, reacciones y comentarios.
+      match /posts/{postId} {
+        allow read: if request.auth != null;
+        allow write: if esAdmin();
+        // Publicar: solo con cuenta de participante (con email) y a tu nombre.
+        allow create: if request.auth != null
+          && request.auth.token.email != null
+          && request.resource.data.authUid == request.auth.uid
+          && request.resource.data.usuarioId is string
+          && request.resource.data.usuarioId.size() <= 80
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() >= 2
+          && request.resource.data.nombre.size() <= 80
+          && request.resource.data.texto is string
+          && request.resource.data.texto.size() <= 500
+          // debe traer texto o foto (o ambos)
+          && (request.resource.data.texto.size() > 0 || request.resource.data.fotoURL is string)
+          && (!('fotoURL' in request.resource.data)
+              || request.resource.data.fotoURL == null
+              || (request.resource.data.fotoURL is string && request.resource.data.fotoURL.size() <= 2000))
+          && request.resource.data.reacciones is map
+          && request.resource.data.reacciones.size() == 0
+          && request.resource.data.numComentarios == 0;
+        // El autor puede borrar su publicación.
+        allow delete: if request.auth != null && resource.data.authUid == request.auth.uid;
+        // Dos actualizaciones permitidas a cualquier participante:
+        //  1) reaccionar — solo puede tocar SU llave (su uid) del mapa de reacciones
+        //  2) contador de comentarios — exactamente ±1 (lo mueve quien comenta/borra)
+        allow update: if request.auth != null
+          && request.auth.token.email != null
+          && (
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reacciones'])
+              && request.resource.data.reacciones.diff(resource.data.reacciones)
+                   .affectedKeys().hasOnly([request.auth.uid]))
+            ||
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['numComentarios'])
+              && request.resource.data.numComentarios is int
+              && request.resource.data.numComentarios >= 0
+              && (request.resource.data.numComentarios == resource.data.numComentarios + 1
+                  || request.resource.data.numComentarios == resource.data.numComentarios - 1))
+          );
+
+        match /comentarios/{comentarioId} {
+          allow read: if request.auth != null;
+          allow write: if esAdmin();
+          allow create: if request.auth != null
+            && request.auth.token.email != null
+            && request.resource.data.authUid == request.auth.uid
+            && request.resource.data.usuarioId is string
+            && request.resource.data.usuarioId.size() <= 80
+            && request.resource.data.nombre is string
+            && request.resource.data.nombre.size() >= 2
+            && request.resource.data.nombre.size() <= 80
+            && request.resource.data.texto is string
+            && request.resource.data.texto.size() >= 1
+            && request.resource.data.texto.size() <= 300;
+          // Cada quien puede borrar su comentario.
+          allow delete: if request.auth != null && resource.data.authUid == request.auth.uid;
+        }
+      }
     }
   }
 }

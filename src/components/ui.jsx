@@ -149,6 +149,7 @@ export function WeekDots({ semana }) {
 
 const TABS = [
   { to: '/', label: 'Hoy', icon: <path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V10" /> },
+  { to: '/feed', label: 'Feed', icon: <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" /> },
   { to: '/historial', label: 'Historial', icon: <path d="M12 8v4l3 3M3.05 11a9 9 0 11.5 4m-.5-4H7m-3.95 0L2 7" /> },
   { to: '/ranking', label: 'Ranking', icon: <path d="M8 21h8m-4-4v4m-6-17h12v4a6 6 0 01-12 0V4zM4 6h2m12 0h2a2 2 0 01-2 4h-1M4 6a2 2 0 002 4h1" /> },
   { to: '/stats', label: 'Stats', icon: <path d="M3 3v18h18M8 16v-5m5 5V8m5 8v-3" /> },

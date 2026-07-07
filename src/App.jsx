@@ -6,6 +6,7 @@ import { drenarCola } from './lib/sheets';
 import Onboarding from './screens/Onboarding';
 import Admin from './screens/Admin';
 import Hoy from './screens/Hoy';
+import Feed from './screens/Feed';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
 import Stats from './screens/Stats';
@@ -48,6 +49,7 @@ function Shell() {
       <div className="page-transition" key={location.pathname}>
         <Routes location={location}>
           <Route path="/" element={<Hoy />} />
+          <Route path="/feed" element={<Feed />} />
           <Route path="/historial" element={<Historial />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/stats" element={<Stats />} />
