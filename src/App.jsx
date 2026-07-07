@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider, TabBar, AnimeIntro } from './components/ui';
+import { ToastProvider, TabBar, AnimeIntro, useToast } from './components/ui';
 import { drenarCola } from './lib/sheets';
+import { alRecibirPush } from './lib/push';
 import Onboarding from './screens/Onboarding';
 import Admin from './screens/Admin';
 import Hoy from './screens/Hoy';
@@ -23,8 +24,19 @@ function Boot() {
 function Shell() {
   const { cargando, autenticado, esAdmin, reto, usuario } = useAuth();
   const location = useLocation();
+  const toast = useToast();
   const [intro, setIntro] = useState(false);
   const previo = useRef(autenticado);
+
+  // Push en primer plano: si llega una notificación con la app abierta,
+  // se muestra como toast en lugar de notificación del sistema.
+  useEffect(() => {
+    if (!autenticado) return undefined;
+    return alRecibirPush((payload) => {
+      const n = payload?.notification || payload?.data;
+      if (n?.title) toast(`${n.title}${n.body ? ` — ${n.body}` : ''}`);
+    });
+  }, [autenticado, toast]);
 
   // Intro cinemática cuando pasas de "no autenticado" a "dentro"
   useEffect(() => {

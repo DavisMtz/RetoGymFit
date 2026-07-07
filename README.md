@@ -114,6 +114,26 @@ npm run build
 firebase deploy --only hosting
 ```
 
+## Notificaciones push (recordatorios de multa)
+
+La app es una **PWA instalable** (manifest + service worker `public/sw.js`). Las
+notificaciones usan **Firebase Cloud Messaging** y requieren dos pasos de
+configuración únicos:
+
+1. **Llave VAPID** (pública, no secreta): Firebase Console → ⚙ Project settings →
+   Cloud Messaging → *Web Push certificates* → **Generate key pair**. Pégala en
+   `src/config/push.js` (o en `.env` como `VITE_FCM_VAPID_KEY`) y vuelve a
+   desplegar hosting. Con la llave presente, cada participante puede activar
+   las notificaciones desde **Perfil → Notificaciones push** (en Android/desktop
+   directo; en iPhone primero deben *instalar* la app: Compartir → Agregar a
+   pantalla de inicio).
+2. **Emisor de recordatorios**: pega `apps-script/PushReminders.gs` en el mismo
+   proyecto de Apps Script del puente y sigue las instrucciones del encabezado
+   (manifest con el scope `firebase.messaging` + ejecutar `instalarTriggerPush`).
+   Cada día ~18:00 revisa quién va atrasado en la semana y le manda un
+   recordatorio antes de que multe. `probarPush` envía una notificación de
+   prueba a todos los tokens registrados.
+
 ## Registrar pagos (bote)
 
 Los pagos se capturan en Firestore (`retos/{retoId}/pagos`) desde la consola de Firebase — campos: `fecha` ("2026-03-01"), `usuario`, `monto` (número), `notas`. Puedes seguir usando tu sidebar de Apps Script para la hoja y duplicar el alta en Firestore, o capturarlos solo en Firestore.

@@ -1,7 +1,7 @@
 {
   "name": "retogymfit",
   "private": true,
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "description": "RETO GYM 2026 — App del reto (Mixto y Damas) con Firebase",
   "scripts": {
