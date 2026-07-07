@@ -1,9 +1,10 @@
 /**
  * Ranking: clasificación semanal/mensual, bote acumulado y actividad reciente.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Avatar, Header, StatusStrip, RankSkeleton, useCountUp } from '../components/ui';
+import { entradaPodio } from '../lib/anim';
 import { obtenerRankingSemanal, obtenerRankingMensual, obtenerBote, obtenerActividadReciente, obtenerUsuariosActivos } from '../data/queries';
 import { hoyMX, semanaISO } from '../lib/dates';
 
@@ -17,6 +18,7 @@ export default function Ranking() {
   const [ticker, setTicker] = useState([]);
   const [fotos, setFotos] = useState({}); // usuarioId → photoURL
   const [girando, setGirando] = useState(false);
+  const podioRef = useRef(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -78,6 +80,13 @@ export default function Ranking() {
   // Orden visual del podio: 2º — 1º — 3º
   const ordenPodio = [podio[1], podio[0], podio[2]].filter(Boolean);
 
+  // Entrada animada del podio (GSAP) cada vez que cambia la lista/pestaña
+  useEffect(() => {
+    if (podio.length) return entradaPodio(podioRef.current);
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lista, tab]);
+
   return (
     <div className="app-shell">
       <Header reto={reto} />
@@ -117,7 +126,7 @@ export default function Ranking() {
         {duelo && <div className="duelo-strip">{duelo.texto}</div>}
 
         {podio.length > 0 && (
-          <div className="podium" key={tab}>
+          <div className="podium" key={tab} ref={podioRef}>
             {ordenPodio.map((r) => {
               const pos = podio.indexOf(r);
               return (
