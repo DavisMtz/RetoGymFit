@@ -7,11 +7,13 @@ App del reto del gym (versión **Mixto** y **Damas**) construida con **React + V
 | Pantalla | Qué hace |
 |---|---|
 | **Onboarding** | Eliges tu reto, buscas tu nombre entre los participantes activos y — la primera vez — creas tu contraseña. Después solo la ingresas. La sesión queda guardada en el dispositivo. |
-| **Hoy** | Registro del día: actividad, tiempo, calorías, código de honor. Calcula CUMPLE / NO CUMPLE / JUSTIFICADO con las reglas de tu reto, muestra tu racha, tu semana visual y la zona de peligro de multa. |
+| **Hoy** | Registro del día: actividad, tiempo, calorías, código de honor. Calcula CUMPLE / NO CUMPLE / JUSTIFICADO con las reglas de tu reto, muestra tu racha, tu semana visual, la zona de peligro de multa y la barra "el equipo hoy" (quiénes ya entrenaron). Al guardar: pantalla de celebración con tu racha y **autopost al feed** con tu actividad y tu nota. |
 | **Historial** | Bitácora completa agrupada por semana con estatus de cada día. |
-| **Ranking** | Clasificación semanal y mensual, bote acumulado y ticker de actividad reciente. |
-| **Stats** | Días totales, rachas, kcal y horas acumuladas, cumplimiento de las últimas 8 semanas y distribución por actividad. |
-| **Perfil** | Tus datos, días de vacaciones/periodo disponibles, cambio de contraseña y cierre de sesión. |
+| **Ranking** | Clasificación semanal y mensual (se reordena animada con FLIP), bote acumulado, ticker de actividad reciente, anillo de progreso semanal en cada avatar y botón 🖐️ para chocar los cinco (le llega por push). |
+| **Stats** | Días totales, rachas, kcal y horas acumuladas (con contadores animados), cumplimiento de las últimas 8 semanas y distribución por actividad. |
+| **Perfil** | Tus datos con anillo de progreso semanal, días de vacaciones/periodo disponibles, tema claro/oscuro, cambio de contraseña y cierre de sesión. |
+
+Extras sociales: reacciones con partículas de emoji, **@menciones en comentarios** con autocomplete y push al mencionado, y pull-to-refresh en Feed y Ranking. El autopost de registro **nunca publica el Periodo Menstrual** (misma política de privacidad que el ticker y las notificaciones).
 
 Las diferencias entre retos (meta 4 vs 3 días, reglas de cumplimiento, actividad "Periodo Menstrual", límites 13 días de vacaciones / 2 días de periodo al mes) viven en `src/config/retos.js`.
 

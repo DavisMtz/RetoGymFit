@@ -221,6 +221,38 @@ export function TabBar() {
   );
 }
 
+// ——————————————————————————————— Anillo de progreso semanal
+
+/**
+ * Envuelve un Avatar con un anillo SVG que marca el avance de la semana
+ * (estilo anillos de actividad). `progreso` va de 0 a 1; se anima con una
+ * transición CSS de stroke-dashoffset. Hereda el tamaño del avatar.
+ */
+export function AvatarRing({ nombre, url, progreso = 0, className = '', ampliable = false }) {
+  const pct = Math.max(0, Math.min(1, Number(progreso) || 0)) * 100;
+  const [dash, setDash] = useState(0);
+  // Arranca en 0 y transiciona al valor real en el siguiente frame
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setDash(pct));
+    return () => cancelAnimationFrame(raf);
+  }, [pct]);
+  return (
+    <span className={`ring-wrap ${pct >= 100 ? 'ring-full' : ''}`}>
+      <Avatar nombre={nombre} url={url} className={className} ampliable={ampliable} />
+      <svg className="ring-svg" viewBox="0 0 36 36" aria-hidden="true">
+        <circle className="ring-track" cx="18" cy="18" r="16.5" pathLength="100" />
+        <circle
+          className="ring-fill"
+          cx="18" cy="18" r="16.5"
+          pathLength="100"
+          strokeDasharray="100"
+          strokeDashoffset={100 - dash}
+        />
+      </svg>
+    </span>
+  );
+}
+
 // ——————————————————————————————— Skeletons
 
 export function RankSkeleton({ rows = 3 }) {
@@ -232,6 +264,130 @@ export function RankSkeleton({ rows = 3 }) {
         </li>
       ))}
     </>
+  );
+}
+
+/** Placeholder con shimmer de una publicación del feed mientras carga. */
+export function PostSkeleton({ posts = 2 }) {
+  return (
+    <>
+      {Array.from({ length: posts }, (_, i) => (
+        <article className="post post-skeleton" key={i} aria-hidden="true">
+          <div className="post-head">
+            <div className="sk sk-av" />
+            <div className="sk sk-text" style={{ maxWidth: 140 }} />
+          </div>
+          <div className="sk sk-line" />
+          <div className="sk sk-line" style={{ width: '65%' }} />
+          <div className="sk sk-foto" />
+        </article>
+      ))}
+    </>
+  );
+}
+
+/** Placeholder de filas genéricas (participantes del admin, listas). */
+export function FilasSkeleton({ rows = 4 }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        <div className="rank-skeleton" style={{ listStyle: 'none' }} key={i} aria-hidden="true">
+          <div className="sk sk-av" /><div className="sk sk-text" /><div className="sk sk-tag" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ——————————————————————————————— Pull to refresh
+
+/**
+ * Gesto pull-to-refresh para PWA: jala hacia abajo desde el tope de la
+ * página para recargar. Devuelve props para el indicador visual.
+ *
+ *   const ptr = usePullToRefresh(async () => { await cargar(); });
+ *   ...
+ *   <PullIndicator {...ptr} />
+ *
+ * Solo se activa con touch, con la página en el tope y jalando hacia abajo;
+ * no interfiere con el scroll normal ni con gestos horizontales.
+ */
+export function usePullToRefresh(onRefresh) {
+  const [estado, setEstado] = useState({ dist: 0, refrescando: false });
+  const ref = useRef({ y0: 0, x0: 0, activo: false, dist: 0, refrescando: false });
+  const cbRef = useRef(onRefresh);
+  cbRef.current = onRefresh;
+
+  useEffect(() => {
+    const UMBRAL = 70;
+    const r = ref.current;
+
+    function onStart(e) {
+      if (r.refrescando || window.scrollY > 0) return;
+      // No iniciar el gesto dentro de capas con su propio scroll/gestos
+      if (e.target.closest('.modal-overlay.show, .sheet-overlay, .lightbox.show')) return;
+      r.y0 = e.touches[0].clientY;
+      r.x0 = e.touches[0].clientX;
+      r.activo = true;
+      r.dist = 0;
+    }
+
+    function onMove(e) {
+      if (!r.activo || r.refrescando) return;
+      const dy = e.touches[0].clientY - r.y0;
+      const dx = Math.abs(e.touches[0].clientX - r.x0);
+      if (dy < 8 || dx > Math.abs(dy)) {
+        if (dy < 0) r.activo = false; // scroll normal hacia arriba
+        return;
+      }
+      if (window.scrollY > 0) { r.activo = false; setEstado({ dist: 0, refrescando: false }); return; }
+      // Amortiguación: cuesta más mientras más jalas
+      r.dist = Math.min(dy * 0.45, 110);
+      setEstado({ dist: r.dist, refrescando: false });
+    }
+
+    async function onEnd() {
+      if (!r.activo || r.refrescando) return;
+      r.activo = false;
+      if (r.dist >= UMBRAL) {
+        r.refrescando = true;
+        setEstado({ dist: UMBRAL, refrescando: true });
+        if (navigator.vibrate) navigator.vibrate(20);
+        try { await cbRef.current?.(); } catch { /* el caller reporta sus errores */ }
+        r.refrescando = false;
+      }
+      r.dist = 0;
+      setEstado({ dist: 0, refrescando: false });
+    }
+
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, []);
+
+  return estado;
+}
+
+export function PullIndicator({ dist, refrescando }) {
+  const visible = dist > 4 || refrescando;
+  return createPortal(
+    <div
+      className={`ptr-indicator ${visible ? 'show' : ''} ${refrescando ? 'refreshing' : ''}`}
+      style={{ transform: `translate(-50%, ${visible ? dist : -10}px)` }}
+      aria-hidden={!visible}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+        {refrescando
+          ? <path d="M3 12a9 9 0 0115.36-6.36L21 8M21 3v5h-5" />
+          : <path d="M12 5v14M5 12l7 7 7-7" />}
+      </svg>
+    </div>,
+    document.body,
   );
 }
 

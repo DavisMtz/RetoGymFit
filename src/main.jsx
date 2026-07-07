@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/global.css';
+import { obtenerTema, aplicarTema } from './lib/tema';
+
+// Aplica el tema guardado ANTES del primer render para evitar el destello
+aplicarTema(obtenerTema());
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -1,18 +1,23 @@
 /**
  * Feed social del reto: publica pensamientos o fotos fitness, reacciona con
- * emojis y comenta. Se actualiza en vivo (onSnapshot) para que se sienta
- * como una red social del equipo.
+ * emojis (con partículas 🎉) y comenta con @menciones. Los registros de
+ * actividad aparecen como tarjetas automáticas. Se actualiza en vivo
+ * (onSnapshot) para que se sienta como una red social del equipo.
  */
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, Avatar, Header, StatusStrip } from '../components/ui';
+import {
+  useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip,
+  PostSkeleton, usePullToRefresh, PullIndicator,
+} from '../components/ui';
 import {
   suscribirPosts, publicarPost, borrarPost, reaccionarPost,
   obtenerComentarios, comentarPost, borrarComentario, obtenerUsuariosActivos,
+  obtenerRankingSemanal, notificarMenciones,
 } from '../data/queries';
 import { subirFotoFeed } from '../lib/feedFoto';
-import { abrirLightbox, punch } from '../lib/anim';
+import { abrirLightbox, punch, particulasEmoji } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
@@ -26,24 +31,122 @@ function hace(ts) {
   return `hace ${Math.round(mins / 1440)} d`;
 }
 
-function Comentarios({ reto, post, usuario, fotos }) {
+// ——— Menciones @nombre ———————————————————————————————
+// Pliegue que PRESERVA la longitud del texto (minúsculas + sin acentos) para
+// poder buscar nombres sin que los índices se desalineen al resaltar.
+function fold(s) {
+  return String(s).toLowerCase()
+    .replace(/[áàäâ]/g, 'a').replace(/[éèëê]/g, 'e').replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o').replace(/[úùüû]/g, 'u').replace(/ñ/g, 'n');
+}
+
+/** Usuarios mencionados en el texto: por nombre completo o primer nombre (si es único). */
+function detectarMencionados(texto, usuarios) {
+  const t = fold(texto);
+  if (!t.includes('@')) return [];
+  const cuentaPrimero = {};
+  usuarios.forEach((u) => {
+    const p = fold(u.nombre.split(' ')[0]);
+    cuentaPrimero[p] = (cuentaPrimero[p] || 0) + 1;
+  });
+  return usuarios.filter((u) => {
+    if (t.includes('@' + fold(u.nombre))) return true;
+    const primero = fold(u.nombre.split(' ')[0]);
+    return cuentaPrimero[primero] === 1 && t.includes('@' + primero);
+  });
+}
+
+/** Renderiza el texto de un comentario resaltando las @menciones. */
+function TextoConMenciones({ texto, usuarios }) {
+  const partes = useMemo(() => {
+    const t = fold(texto);
+    const zonas = [];
+    (usuarios || []).forEach((u) => {
+      [u.nombre, u.nombre.split(' ')[0]].forEach((candidato) => {
+        const token = '@' + fold(candidato);
+        let idx = t.indexOf(token);
+        while (idx !== -1) {
+          zonas.push([idx, idx + token.length]);
+          idx = t.indexOf(token, idx + 1);
+        }
+      });
+    });
+    if (!zonas.length) return [{ texto, mencion: false }];
+    // Fusiona zonas solapadas (nombre completo vs primer nombre) y corta
+    zonas.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+    const unidas = [];
+    zonas.forEach(([a, b]) => {
+      const ultima = unidas[unidas.length - 1];
+      if (ultima && a <= ultima[1]) ultima[1] = Math.max(ultima[1], b);
+      else unidas.push([a, b]);
+    });
+    const out = [];
+    let cursor = 0;
+    unidas.forEach(([a, b]) => {
+      if (a > cursor) out.push({ texto: texto.slice(cursor, a), mencion: false });
+      out.push({ texto: texto.slice(a, b), mencion: true });
+      cursor = b;
+    });
+    if (cursor < texto.length) out.push({ texto: texto.slice(cursor), mencion: false });
+    return out;
+  }, [texto, usuarios]);
+
+  return (
+    <p>
+      {partes.map((p, i) => (p.mencion ? <span className="mention" key={i}>{p.texto}</span> : p.texto))}
+    </p>
+  );
+}
+
+function Comentarios({ reto, post, usuario, fotos, usuarios }) {
   const toast = useToast();
   const [comentarios, setComentarios] = useState(null);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [mencion, setMencion] = useState(null); // { query, start } — palabra @ bajo el cursor
+  const inputRef = useRef(null);
 
   useEffect(() => {
     obtenerComentarios(reto.id, post.id).then(setComentarios).catch(() => setComentarios([]));
   }, [reto.id, post.id]);
+
+  function onCambio(e) {
+    const v = e.target.value;
+    setTexto(v);
+    const caret = e.target.selectionStart ?? v.length;
+    // ¿La palabra que se está escribiendo empieza con @? → abre el autocomplete
+    const m = v.slice(0, caret).match(/@([a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]*(?: [a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]*)?)$/);
+    setMencion(m ? { query: m[1], start: caret - m[0].length } : null);
+  }
+
+  const sugerencias = useMemo(() => {
+    if (!mencion) return [];
+    const q = fold(mencion.query.trim());
+    return (usuarios || [])
+      .filter((u) => u.id !== usuario.id && (!q || fold(u.nombre).includes(q)))
+      .slice(0, 5);
+  }, [mencion, usuarios, usuario.id]);
+
+  function elegirMencion(u) {
+    vibrate(12);
+    const finQuery = mencion.start + mencion.query.length + 1; // +1 por la @
+    const nuevo = (texto.slice(0, mencion.start) + '@' + u.nombre + ' ' + texto.slice(finQuery)).slice(0, 300);
+    setTexto(nuevo);
+    setMencion(null);
+    inputRef.current?.focus();
+  }
 
   async function enviar(e) {
     e.preventDefault();
     const t = texto.trim();
     if (!t) return;
     setEnviando(true);
+    setMencion(null);
     vibrate(20);
     try {
       await comentarPost(reto.id, post, usuario, t);
+      // Aviso push a quienes fueron @mencionados (no bloquea)
+      notificarMenciones(reto.id, post, usuario, t, detectarMencionados(t, usuarios || []));
       setTexto('');
       setComentarios(await obtenerComentarios(reto.id, post.id));
     } catch {
@@ -70,7 +173,7 @@ function Comentarios({ reto, post, usuario, fotos }) {
           <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" ampliable />
           <div className="comment-bubble">
             <b>{c.nombre.split(' ').slice(0, 2).join(' ')}</b>
-            <p>{c.texto}</p>
+            <TextoConMenciones texto={c.texto} usuarios={usuarios} />
             <span className="comment-meta">{hace(c.creadoEn)}</span>
           </div>
           {c.authUid === auth.currentUser?.uid && (
@@ -79,13 +182,25 @@ function Comentarios({ reto, post, usuario, fotos }) {
         </div>
       ))}
       <form className="comment-form" onSubmit={enviar}>
+        {mencion && sugerencias.length > 0 && (
+          <div className="mencion-pop" role="listbox" aria-label="Mencionar a alguien">
+            {sugerencias.map((u) => (
+              <button className="mencion-item" type="button" key={u.id} role="option" aria-selected="false" onClick={() => elegirMencion(u)}>
+                <Avatar nombre={u.nombre} url={u.photoURL} className="rank-av" />
+                {u.nombre}
+              </button>
+            ))}
+          </div>
+        )}
         <Avatar nombre={usuario.nombre} url={usuario.photoURL} className="comment-av" />
         <input
+          ref={inputRef}
           type="text"
           maxLength="300"
-          placeholder="Escribe un comentario…"
+          placeholder="Escribe un comentario… (@ para mencionar)"
           value={texto}
-          onChange={(e) => setTexto(e.target.value)}
+          onChange={onCambio}
+          onBlur={() => setTimeout(() => setMencion(null), 200)}
         />
         <button className="comment-send" type="submit" disabled={enviando || !texto.trim()} aria-label="Enviar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
@@ -131,7 +246,7 @@ function Lightbox({ foto, onClose }) {
   );
 }
 
-function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
+function Post({ reto, post, usuario, fotos, usuarios, dias, onBorrar, onVerFoto }) {
   const toast = useToast();
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const miUid = auth.currentUser?.uid;
@@ -147,6 +262,8 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
   async function reaccionar(emoji, el) {
     vibrate(18);
     if (el) punch(el, 1.35);
+    // Partículas solo al PONER una reacción (no al quitarla o cambiarla)
+    if (el && miReaccion !== emoji) particulasEmoji(el, emoji);
     try {
       await reaccionarPost(reto.id, post, usuario, miReaccion === emoji ? null : emoji);
       // onSnapshot refresca el post solo; no hace falta estado local
@@ -156,19 +273,47 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
   }
 
   const totalComentarios = post.numComentarios || 0;
+  const esRegistro = post.tipoPost === 'registro' && post.actividad;
+  const iconoActividad = esRegistro
+    ? (reto.actividades.find((a) => a.id === post.actividad.tipo)?.icono || '💪')
+    : null;
+  const metaActividad = esRegistro
+    ? [
+      post.actividad.minutos > 0 ? `${post.actividad.minutos} min` : null,
+      post.actividad.calorias > 0 ? `${post.actividad.calorias} kcal` : null,
+      post.actividad.estatus === 'JUSTIFICADO' ? 'Justificado' : null,
+    ].filter(Boolean).join(' · ')
+    : '';
 
   return (
     <article className="post">
       <header className="post-head">
-        <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="post-av" ampliable />
+        <AvatarRing
+          nombre={post.nombre}
+          url={fotos[post.usuarioId]}
+          progreso={(dias[post.usuarioId] || 0) / reto.metaDiasSemana}
+          className="post-av"
+          ampliable
+        />
         <div className="post-author">
           <b>{post.nombre}</b>
-          <span>{hace(post.creadoEn)}</span>
+          <span>{esRegistro ? `registró su actividad · ${hace(post.creadoEn)}` : hace(post.creadoEn)}</span>
         </div>
         {post.authUid === miUid && (
           <button className="comment-del" type="button" aria-label="Borrar publicación" onClick={() => { vibrate(); onBorrar(post); }}>✕</button>
         )}
       </header>
+
+      {esRegistro && (
+        <div className="post-actividad">
+          <span className="pa-icon">{iconoActividad}</span>
+          <div className="pa-info">
+            <div className="pa-tipo">{post.actividad.tipo}</div>
+            {metaActividad && <div className="pa-meta">{metaActividad}</div>}
+          </div>
+          {(post.actividad.racha || 0) > 1 && <span className="pa-racha">🔥 {post.actividad.racha}</span>}
+        </div>
+      )}
 
       {post.texto && <p className="post-text">{post.texto}</p>}
       {post.fotoURL && (
@@ -205,7 +350,7 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
       </div>
 
       {comentariosAbiertos && (
-        <Comentarios reto={reto} post={post} usuario={usuario} fotos={fotos} />
+        <Comentarios reto={reto} post={post} usuario={usuario} fotos={fotos} usuarios={usuarios} />
       )}
     </article>
   );
@@ -217,7 +362,9 @@ export default function Feed() {
   const fileRef = useRef();
 
   const [posts, setPosts] = useState(null);
-  const [fotos, setFotos] = useState({}); // usuarioId → photoURL
+  const [fotos, setFotos] = useState({});     // usuarioId → photoURL
+  const [usuarios, setUsuarios] = useState([]); // activos (menciones + authUid)
+  const [dias, setDias] = useState({});       // usuarioId → días de esta semana (anillo)
   const [texto, setTexto] = useState('');
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
@@ -235,12 +382,20 @@ export default function Feed() {
     return unsub;
   }, [reto.id, toast]);
 
-  // Avatares de todos para posts/comentarios
-  useEffect(() => {
-    obtenerUsuariosActivos(reto.id)
-      .then((us) => setFotos(Object.fromEntries(us.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL]))))
-      .catch(() => {});
-  }, [reto.id]);
+  // Avatares, lista para menciones y progreso semanal (anillos)
+  const cargarGente = useCallback(async () => {
+    const [us, ranking] = await Promise.all([
+      obtenerUsuariosActivos(reto.id),
+      obtenerRankingSemanal(reto).catch(() => []),
+    ]);
+    setUsuarios(us);
+    setFotos(Object.fromEntries(us.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));
+    setDias(Object.fromEntries(ranking.map((r) => [r.usuarioId, r.dias])));
+  }, [reto]);
+
+  useEffect(() => { cargarGente().catch(() => {}); }, [cargarGente]);
+
+  const ptr = usePullToRefresh(() => cargarGente().catch(() => {}));
 
   function elegirFoto(e) {
     const file = e.target.files?.[0];
@@ -289,6 +444,7 @@ export default function Feed() {
 
   return (
     <div className="app-shell">
+      <PullIndicator {...ptr} />
       <Header reto={reto} />
       <StatusStrip />
 
@@ -330,13 +486,22 @@ export default function Feed() {
       </section>
 
       {/* Posts */}
-      {posts === null && <div className="rank-empty">Cargando el feed…</div>}
+      {posts === null && <PostSkeleton posts={2} />}
       {posts !== null && !posts.length && (
         <div className="rank-empty">Nadie ha publicado aún. ¡Rompe el hielo con tu primera foto! 📸</div>
       )}
       {(posts || []).map((p, i) => (
         <div key={p.id} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
-          <Post reto={reto} post={p} usuario={usuario} fotos={fotos} onBorrar={setModalBorrar} onVerFoto={setFotoAbierta} />
+          <Post
+            reto={reto}
+            post={p}
+            usuario={usuario}
+            fotos={fotos}
+            usuarios={usuarios}
+            dias={dias}
+            onBorrar={setModalBorrar}
+            onVerFoto={setFotoAbierta}
+          />
         </div>
       ))}
 

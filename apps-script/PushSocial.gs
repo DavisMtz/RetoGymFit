@@ -6,6 +6,8 @@
  *   • Registro de actividad nuevo   → a todo el equipo (menos el autor)
  *   • Reacción a TU publicación     → solo a ti
  *   • Comentario en TU publicación  → solo a ti
+ *   • High-five 🖐️ que te mandaron  → solo a ti
+ *   • Mención @tu-nombre            → solo a ti
  *
  * Vive en el MISMO proyecto de Apps Script que SheetsBridge.gs y
  * PushReminders.gs (reutiliza FB_PROJECT, ZONA, idToken_ y runQuery_).
@@ -36,8 +38,11 @@ function enviarNotificacionesSociales() {
     if (!usuarios.length) { limpiarEventos_(retoId); return; }
     var tokenPorAuthUid = mapaAuthUid_(retoId, usuarios);
 
-    // 1) Publicaciones nuevas en el feed
+    // 1) Publicaciones nuevas en el feed. Los autoposts de registro
+    //    (tipoPost 'registro') se saltan: el aviso "ya entrenó hoy" del
+    //    punto 2 ya cubre esa actividad y avisar dos veces sería spam.
     consultarDesde_(retoId, 'posts', desde).forEach(function (p) {
+      if (p.tipoPost === 'registro') return;
       var cuerpo = p.texto ? recortar_(p.texto, 90) : '📸 Subió una foto — échale un ojo.';
       difundir_(usuarios, p.authUid, '📣 ' + primerNombre_(p.nombre) + ' publicó en el feed', cuerpo, retoId);
     });
@@ -66,6 +71,12 @@ function enviarNotificacionesSociales() {
             e.postTexto ? '“' + recortar_(e.postTexto, 70) + '”' : 'Abre el feed para verlo.');
         } else if (e.tipo === 'comentario') {
           enviarFCM_(retoId, destino, '💬 ' + primerNombre_(e.deNombre) + ' comentó tu publicación',
+            recortar_(e.detalle, 90));
+        } else if (e.tipo === 'highfive') {
+          enviarFCM_(retoId, destino, '🖐️ ' + primerNombre_(e.deNombre) + ' te chocó los cinco',
+            '¡Tu esfuerzo se nota! Sigue así.');
+        } else if (e.tipo === 'mencion') {
+          enviarFCM_(retoId, destino, '💬 ' + primerNombre_(e.deNombre) + ' te mencionó en un comentario',
             recortar_(e.detalle, 90));
         }
       }

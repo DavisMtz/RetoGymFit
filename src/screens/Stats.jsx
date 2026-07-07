@@ -63,6 +63,8 @@ export default function Stats() {
   const diasAnim = useCountUp(stats ? stats.totalDias : null, 900);
   const kcalAnim = useCountUp(stats ? stats.totalKcal : null, 1500);
   const hrsAnim = useCountUp(stats ? Math.round(stats.totalMin / 60) : null, 1200);
+  const rachaAnim = useCountUp(stats ? stats.racha : null, 800);
+  const mejorAnim = useCountUp(stats ? stats.mejor : null, 1000);
 
   return (
     <div className="app-shell">
@@ -85,7 +87,7 @@ export default function Stats() {
               <div className="st-label">Días cumplidos<br />en total</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.12s' }}>
-              <div className="st-num">{stats.racha}<small>días</small></div>
+              <div className="st-num">{Math.round(rachaAnim)}<small>días</small></div>
               <div className="st-label">Racha<br />actual 🔥</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.19s' }}>
@@ -97,7 +99,7 @@ export default function Stats() {
               <div className="st-label">Horas de<br />entrenamiento</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.33s' }}>
-              <div className="st-num">{stats.mejor}<small>días</small></div>
+              <div className="st-num">{Math.round(mejorAnim)}<small>días</small></div>
               <div className="st-label">Mejor racha<br />histórica</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.4s' }}>

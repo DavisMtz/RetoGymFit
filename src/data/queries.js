@@ -171,6 +171,27 @@ export async function obtenerRankingMensual(reto) {
   return agregarRanking(snap.docs, reto.metaDiasSemana, null);
 }
 
+/**
+ * Quiénes ya entrenaron hoy (para la barra grupal de la pantalla Hoy).
+ * Igual que el ticker: solo CUMPLE/JUSTIFICADO y sin Periodo Menstrual,
+ * por privacidad.
+ */
+export async function obtenerQuienesEntrenaronHoy(retoId) {
+  const q = query(col(retoId, 'registros'), where('fecha', '==', hoyMX()));
+  const snap = await getDocs(q);
+  const vistos = new Set();
+  const lista = [];
+  snap.docs.forEach((d) => {
+    const r = d.data();
+    if (r.estatus !== 'CUMPLE' && r.estatus !== 'JUSTIFICADO') return;
+    if (r.tipo === 'Periodo Menstrual') return;
+    if (vistos.has(r.usuarioId)) return;
+    vistos.add(r.usuarioId);
+    lista.push({ usuarioId: r.usuarioId, nombre: r.nombre });
+  });
+  return lista;
+}
+
 /** Actividad reciente para el ticker (sin Periodo Menstrual, por privacidad) */
 export async function obtenerActividadReciente(retoId, max = 8) {
   const q = query(col(retoId, 'registros'), orderBy('creadoEn', 'desc'), limit(20));
@@ -320,6 +341,69 @@ export async function publicarPost(retoId, usuario, { texto, fotoURL }) {
 
 export async function borrarPost(retoId, postId) {
   await deleteDoc(doc(db, 'retos', retoId, 'posts', postId));
+}
+
+/**
+ * Publica automáticamente la actividad del día en el feed: tarjeta especial
+ * con tipo/minutos/kcal/racha y, como texto, la nota que acompañó al registro.
+ * No lanza — el autopost es cortesía y nunca debe bloquear el registro.
+ */
+export async function publicarPostRegistro(retoId, usuario, registro, racha) {
+  try {
+    await addDoc(col(retoId, 'posts'), {
+      usuarioId: usuario.id,
+      authUid: auth.currentUser.uid,
+      nombre: usuario.nombre,
+      texto: (registro.notas || '').slice(0, 500),
+      fotoURL: null,
+      tipoPost: 'registro',
+      actividad: {
+        tipo: registro.tipo,
+        minutos: Number(registro.minutos) || 0,
+        calorias: Number(registro.calorias) || 0,
+        estatus: registro.estatus,
+        racha: Number(racha) || 0,
+      },
+      reacciones: {},
+      numComentarios: 0,
+      creadoEn: serverTimestamp(),
+    });
+  } catch { /* el registro ya quedó guardado; el feed no es crítico */ }
+}
+
+/** High-five 🖐️ a otro participante — le llega como notificación push. */
+export async function enviarHighFive(retoId, deUsuario, paraUsuario) {
+  if (!paraUsuario?.authUid) throw new Error('Sin cuenta activa');
+  if (paraUsuario.authUid === auth.currentUser?.uid) return;
+  await addDoc(col(retoId, 'eventos'), {
+    tipo: 'highfive',
+    deAuthUid: auth.currentUser.uid,
+    deNombre: deUsuario?.nombre || 'Alguien',
+    paraAuthUid: paraUsuario.authUid,
+    detalle: '🖐️',
+    postTexto: '',
+    creadoEn: serverTimestamp(),
+  });
+}
+
+/**
+ * Notifica a los participantes @mencionados en un comentario (máx. 3).
+ * Fire-and-forget: la notificación es cortesía, no bloquea el comentario.
+ */
+export function notificarMenciones(retoId, post, usuario, texto, mencionados) {
+  const miUid = auth.currentUser?.uid;
+  (mencionados || []).slice(0, 3).forEach((m) => {
+    if (!m.authUid || m.authUid === miUid) return;
+    addDoc(col(retoId, 'eventos'), {
+      tipo: 'mencion',
+      deAuthUid: miUid,
+      deNombre: usuario?.nombre || 'Alguien',
+      paraAuthUid: m.authUid,
+      detalle: String(texto || '').slice(0, 120),
+      postTexto: String(post?.texto || '').slice(0, 80),
+      creadoEn: serverTimestamp(),
+    }).catch(() => { /* no crítico */ });
+  });
 }
 
 /**
