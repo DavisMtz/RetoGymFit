@@ -8,9 +8,10 @@
  */
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  setDoc, updateDoc, serverTimestamp,
+  setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp,
+  onSnapshot, writeBatch, increment, deleteField,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 import { hoyMX, semanaISO, anioISO, mesMX, diasDeSemana, lunesDe, sumarDias } from '../lib/dates';
 
 const col = (retoId, sub) => collection(db, 'retos', retoId, sub);
@@ -192,4 +193,148 @@ export async function obtenerActividadReciente(retoId, max = 8) {
 export async function obtenerBote(retoId) {
   const snap = await getDocs(col(retoId, 'pagos'));
   return snap.docs.reduce((total, d) => total + (parseFloat(d.data().monto) || 0), 0);
+}
+
+// ——————————————————————————————— ADMIN
+// Estas operaciones solo las autorizan las reglas para el super usuario
+// (admin@retogymfit.app); ver firestore.rules → esAdmin().
+
+/** Todos los participantes del reto, incluidos los dados de baja. */
+export async function adminObtenerUsuarios(retoId) {
+  const snap = await getDocs(col(retoId, 'usuarios'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+/** Actualiza campos arbitrarios de un participante (estado, nombre, etc.). */
+export async function adminActualizarUsuario(retoId, usuarioId, campos) {
+  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), campos);
+}
+
+/**
+ * Crea o sobrescribe el registro de un participante en cualquier fecha.
+ * Deriva semana/mes del `fecha` para mantener el ranking consistente.
+ */
+export async function adminGuardarRegistro(retoId, usuario, datos) {
+  const { fecha } = datos;
+  const registro = {
+    usuarioId: usuario.id,
+    nombre: usuario.nombre,
+    fecha,
+    semanaIso: semanaISO(fecha),
+    anioIso: anioISO(fecha),
+    mes: fecha.slice(0, 7),
+    tipo: datos.tipo,
+    minutos: Number(datos.minutos) || 0,
+    calorias: Number(datos.calorias) || 0,
+    evidencia: datos.evidencia ?? 'ADMIN',
+    estatus: datos.estatus,
+    notas: datos.notas || '',
+    creadoEn: serverTimestamp(),
+    editadoPorAdmin: true,
+  };
+  await setDoc(doc(db, 'retos', retoId, 'registros', idRegistro(usuario.id, fecha)), registro);
+  return registro;
+}
+
+export async function adminBorrarRegistro(retoId, registroId) {
+  await deleteDoc(doc(db, 'retos', retoId, 'registros', registroId));
+}
+
+/** Pagos del bote, más recientes primero. */
+export async function adminObtenerPagos(retoId) {
+  const snap = await getDocs(col(retoId, 'pagos'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+
+export async function adminAgregarPago(retoId, pago) {
+  const ref = await addDoc(col(retoId, 'pagos'), {
+    fecha: pago.fecha,
+    usuario: pago.usuario,
+    monto: Number(pago.monto) || 0,
+    notas: pago.notas || '',
+    creadoEn: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function adminBorrarPago(retoId, pagoId) {
+  await deleteDoc(doc(db, 'retos', retoId, 'pagos', pagoId));
+}
+
+// ——————————————————————————————— FEED SOCIAL
+// Publicaciones con texto/foto + reacciones (una por persona, llaveada por
+// authUid) + comentarios. Las reglas validan autoría; ver firestore.rules.
+
+/** Feed en vivo: llama a cb con los posts (más recientes primero). Devuelve unsubscribe. */
+export function suscribirPosts(retoId, cb, onError, max = 30) {
+  const q = query(col(retoId, 'posts'), orderBy('creadoEn', 'desc'), limit(max));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(err),
+  );
+}
+
+export async function publicarPost(retoId, usuario, { texto, fotoURL }) {
+  const post = {
+    usuarioId: usuario.id,
+    authUid: auth.currentUser.uid,
+    nombre: usuario.nombre,
+    texto: texto || '',
+    fotoURL: fotoURL || null,
+    reacciones: {},
+    numComentarios: 0,
+    creadoEn: serverTimestamp(),
+  };
+  const ref = await addDoc(col(retoId, 'posts'), post);
+  return ref.id;
+}
+
+export async function borrarPost(retoId, postId) {
+  await deleteDoc(doc(db, 'retos', retoId, 'posts', postId));
+}
+
+/** Reacciona con un emoji, o pasa null para quitar tu reacción. */
+export async function reaccionarPost(retoId, postId, emoji) {
+  const uid = auth.currentUser.uid;
+  await updateDoc(doc(db, 'retos', retoId, 'posts', postId), {
+    [`reacciones.${uid}`]: emoji == null ? deleteField() : emoji,
+  });
+}
+
+export async function obtenerComentarios(retoId, postId) {
+  const q = query(
+    collection(db, 'retos', retoId, 'posts', postId, 'comentarios'),
+    orderBy('creadoEn', 'asc'),
+    limit(100),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Comenta y sube el contador del post en una sola operación atómica. */
+export async function comentarPost(retoId, postId, usuario, texto) {
+  const batch = writeBatch(db);
+  const comentarioRef = doc(collection(db, 'retos', retoId, 'posts', postId, 'comentarios'));
+  batch.set(comentarioRef, {
+    usuarioId: usuario.id,
+    authUid: auth.currentUser.uid,
+    nombre: usuario.nombre,
+    texto,
+    creadoEn: serverTimestamp(),
+  });
+  batch.update(doc(db, 'retos', retoId, 'posts', postId), { numComentarios: increment(1) });
+  await batch.commit();
+  return comentarioRef.id;
+}
+
+export async function borrarComentario(retoId, postId, comentarioId) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'retos', retoId, 'posts', postId, 'comentarios', comentarioId));
+  batch.update(doc(db, 'retos', retoId, 'posts', postId), { numComentarios: increment(-1) });
+  await batch.commit();
 }
