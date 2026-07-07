@@ -55,26 +55,39 @@ function doPost(e) {
     if (body.token !== TOKEN) { out.message = 'Token inválido'; return responder(out); }
 
     if (body.accion === 'registro') {
-      var sheetId = HOJAS[body.retoId];
-      if (!sheetId) throw new Error('Reto desconocido: ' + body.retoId);
+      // Alta normal desde la app: agrega la fila; ignora si ya existe (reintentos)
       var r = body.registro;
-      var hoja = SpreadsheetApp.openById(sheetId).getSheetByName('Registros');
-      if (!hoja) throw new Error("No existe la pestaña 'Registros' en " + body.retoId);
-
-      // Evitar duplicados si la app reintenta
-      var datos = hoja.getDataRange().getValues();
-      for (var i = 1; i < datos.length; i++) {
-        var fechaStr = datos[i][2] instanceof Date
-          ? Utilities.formatDate(datos[i][2], ZONA, 'yyyy-MM-dd') : String(datos[i][2]);
-        if (datos[i][1] === r.nombre && fechaStr === r.fecha) {
-          out.success = true; out.message = 'Duplicado ignorado'; return responder(out);
-        }
+      var hoja = hojaRegistros_(body.retoId);
+      if (buscarFilaRegistro_(hoja, r.nombre, r.fecha) > 0) {
+        out.success = true; out.message = 'Duplicado ignorado'; return responder(out);
       }
-      var p = r.fecha.split('-');
-      var fechaGuardar = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12, 0, 0);
-      hoja.appendRow([new Date(), r.nombre, fechaGuardar, r.tipo,
-        Number(r.minutos) || 0, Number(r.calorias) || 0, r.evidencia || '', r.estatus, r.notas || '']);
+      hoja.appendRow(filaRegistro_(r));
       out.success = true;
+    } else if (body.accion === 'registro-upsert') {
+      // Edición/alta del admin: si la fila existe la ACTUALIZA, si no la agrega
+      var ru = body.registro;
+      var hojaU = hojaRegistros_(body.retoId);
+      var filaU = buscarFilaRegistro_(hojaU, ru.nombre, ru.fecha);
+      if (filaU > 0) {
+        // Conserva timestamp (A), usuario (B) y fecha (C); actualiza D..I
+        hojaU.getRange(filaU, 4, 1, 6).setValues([[ru.tipo,
+          Number(ru.minutos) || 0, Number(ru.calorias) || 0,
+          ru.evidencia || '', ru.estatus, ru.notas || '']]);
+        out.message = 'Fila actualizada';
+      } else {
+        hojaU.appendRow(filaRegistro_(ru));
+        out.message = 'Fila agregada';
+      }
+      out.success = true;
+    } else if (body.accion === 'registro-borrar') {
+      // Borrado del admin: elimina la fila de la hoja para que el espejo
+      // de 15 min no reviva el registro ya borrado en Firestore
+      var rb = body.registro;
+      var hojaB = hojaRegistros_(body.retoId);
+      var filaB = buscarFilaRegistro_(hojaB, rb.nombre, rb.fecha);
+      if (filaB > 0) hojaB.deleteRow(filaB);
+      out.success = true;
+      out.message = filaB > 0 ? 'Fila eliminada' : 'Fila no encontrada (nada que borrar)';
     } else {
       out.message = 'Acción desconocida';
     }
@@ -111,6 +124,35 @@ function doGet(e) {
 
 function responder(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// — helpers de la pestaña Registros (usadas por doPost)
+
+function hojaRegistros_(retoId) {
+  var sheetId = HOJAS[retoId];
+  if (!sheetId) throw new Error('Reto desconocido: ' + retoId);
+  var hoja = SpreadsheetApp.openById(sheetId).getSheetByName('Registros');
+  if (!hoja) throw new Error("No existe la pestaña 'Registros' en " + retoId);
+  return hoja;
+}
+
+/** Número de fila (1-based) del registro nombre+fecha, o -1 si no existe. */
+function buscarFilaRegistro_(hoja, nombre, fecha) {
+  var datos = hoja.getDataRange().getValues();
+  for (var i = 1; i < datos.length; i++) {
+    var fechaStr = datos[i][2] instanceof Date
+      ? Utilities.formatDate(datos[i][2], ZONA, 'yyyy-MM-dd') : String(datos[i][2]);
+    if (String(datos[i][1]).trim() === String(nombre).trim() && fechaStr === fecha) return i + 1;
+  }
+  return -1;
+}
+
+/** Fila completa A..I de un registro para appendRow. */
+function filaRegistro_(r) {
+  var p = r.fecha.split('-');
+  var fechaGuardar = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12, 0, 0);
+  return [new Date(), r.nombre, fechaGuardar, r.tipo,
+    Number(r.minutos) || 0, Number(r.calorias) || 0, r.evidencia || '', r.estatus, r.notas || ''];
 }
 
 // ════════════════════════════════════════════════════════════════

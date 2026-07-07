@@ -1,7 +1,9 @@
 /**
  * Panel del super usuario: ver, ajustar y corregir libremente los datos de
- * todos los participantes (registros, estado, pagos del bote) en ambos retos.
- * El acceso lo validan las reglas de Firestore (admin@retogymfit.app).
+ * todos los participantes (registros, estado, pagos del bote, publicaciones
+ * del feed) en ambos retos. Los cambios de registros se replican también a
+ * la hoja de Google Sheets (upsert/borrado de la fila) para no capturar dos
+ * veces. El acceso lo validan las reglas de Firestore (admin@retogymfit.app).
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -10,12 +12,22 @@ import { LISTA_RETOS, getReto } from '../config/retos';
 import {
   adminObtenerUsuarios, adminActualizarUsuario, adminGuardarRegistro, adminBorrarRegistro,
   adminObtenerPagos, adminAgregarPago, adminBorrarPago,
-  obtenerHistorial, obtenerRankingSemanal,
+  adminObtenerPosts, adminActualizarPost, adminBorrarPost,
+  obtenerHistorial, obtenerRankingSemanal, obtenerComentarios, borrarComentario,
 } from '../data/queries';
-import { sincronizarRegistro } from '../lib/sheets';
+import { sincronizarRegistroAdmin, borrarRegistroSheet } from '../lib/sheets';
 import { hoyMX } from '../lib/dates';
 
 const ESTATUS = ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO'];
+
+function hace(ts) {
+  if (!ts?.toDate) return 'ahora';
+  const mins = Math.max(0, Math.round((Date.now() - ts.toDate().getTime()) / 60000));
+  if (mins < 1) return 'ahora';
+  if (mins < 60) return `hace ${mins} min`;
+  if (mins < 1440) return `hace ${Math.round(mins / 60)} h`;
+  return `hace ${Math.round(mins / 1440)} d`;
+}
 
 function FormRegistro({ reto, usuario, registro, onGuardado, onCancelar }) {
   const toast = useToast();
@@ -36,7 +48,7 @@ function FormRegistro({ reto, usuario, registro, onGuardado, onCancelar }) {
     try {
       const datos = { fecha, tipo, minutos, calorias, estatus, notas: notas.trim(), evidencia: registro?.evidencia ?? 'ADMIN' };
       const reg = await adminGuardarRegistro(reto.id, usuario, datos);
-      sincronizarRegistro(reto, reg); // mantiene el espejo en Google Sheets
+      sincronizarRegistroAdmin(reto, reg); // crea o actualiza la fila en Google Sheets
       toast(editando ? 'Registro actualizado ✓' : 'Registro añadido ✓');
       onGuardado();
     } catch {
@@ -101,8 +113,14 @@ export default function Admin() {
   const [abierto, setAbierto] = useState(null);       // usuarioId expandido
   const [historial, setHistorial] = useState({});     // usuarioId → registros
   const [pagos, setPagos] = useState(null);
+  const [posts, setPosts] = useState(null);
+  const [postAbierto, setPostAbierto] = useState(null);     // postId expandido
+  const [comentarios, setComentarios] = useState({});       // postId → comentarios
   const [modalRegistro, setModalRegistro] = useState(null); // { usuario, registro|null }
   const [modalBorrar, setModalBorrar] = useState(null);     // { usuario, registro }
+  const [modalEditarPost, setModalEditarPost] = useState(null); // post
+  const [modalBorrarPost, setModalBorrarPost] = useState(null); // post
+  const [textoPost, setTextoPost] = useState('');
   const [modalPago, setModalPago] = useState(false);
   const [modalSalir, setModalSalir] = useState(false);
   const [pago, setPago] = useState({ fecha: hoyMX(), usuario: '', monto: '', notas: '' });
@@ -110,18 +128,21 @@ export default function Admin() {
 
   const cargar = useCallback(async () => {
     setUsuarios(null); setPagos(null); setAbierto(null); setHistorial({});
+    setPosts(null); setPostAbierto(null); setComentarios({});
     try {
-      const [us, ranking, ps] = await Promise.all([
+      const [us, ranking, ps, po] = await Promise.all([
         adminObtenerUsuarios(retoId),
         obtenerRankingSemanal(getReto(retoId)),
         adminObtenerPagos(retoId),
+        adminObtenerPosts(retoId),
       ]);
       setUsuarios(us);
       setDiasSemana(Object.fromEntries(ranking.map((r) => [r.usuarioId, r.dias])));
       setPagos(ps);
+      setPosts(po);
     } catch {
       toast('Error al cargar datos del reto', true);
-      setUsuarios([]); setPagos([]);
+      setUsuarios([]); setPagos([]); setPosts([]);
     }
   }, [retoId, toast]);
 
@@ -159,10 +180,66 @@ export default function Admin() {
     setModalBorrar(null);
     try {
       await adminBorrarRegistro(retoId, registro.id);
-      toast('Registro eliminado (recuerda ajustar el Sheet si aplica)');
+      borrarRegistroSheet(reto, registro); // quita también la fila de Google Sheets
+      toast('Registro eliminado ✓ (también de la hoja)');
       await cargarHistorial(usuario.id);
     } catch {
       toast('No se pudo eliminar.', true);
+    }
+  }
+
+  // ——— moderación del feed
+
+  function togglePost(p) {
+    vibrate(12);
+    const nuevo = postAbierto === p.id ? null : p.id;
+    setPostAbierto(nuevo);
+    if (nuevo && !comentarios[p.id] && (p.numComentarios || 0) > 0) {
+      obtenerComentarios(retoId, p.id)
+        .then((cs) => setComentarios((prev) => ({ ...prev, [p.id]: cs })))
+        .catch(() => toast('No pude cargar los comentarios', true));
+    }
+  }
+
+  async function guardarPost(e) {
+    e.preventDefault();
+    const post = modalEditarPost;
+    const texto = textoPost.trim();
+    if (!texto && !post.fotoURL) { toast('La publicación no puede quedar vacía', true); return; }
+    setEnviando(true);
+    try {
+      await adminActualizarPost(retoId, post.id, { texto, editadoPorAdmin: true });
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, texto } : p)));
+      setModalEditarPost(null);
+      toast('Publicación actualizada ✓');
+    } catch {
+      toast('No se pudo actualizar.', true);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function borrarPost() {
+    const post = modalBorrarPost;
+    setModalBorrarPost(null);
+    try {
+      await adminBorrarPost(retoId, post.id);
+      setPosts((prev) => prev.filter((p) => p.id !== post.id));
+      toast('Publicación eliminada');
+    } catch {
+      toast('No se pudo eliminar la publicación.', true);
+    }
+  }
+
+  async function borrarComentarioAdmin(post, c) {
+    try {
+      await borrarComentario(retoId, post.id, c.id);
+      setComentarios((prev) => ({ ...prev, [post.id]: (prev[post.id] || []).filter((x) => x.id !== c.id) }));
+      setPosts((prev) => prev.map((p) => (p.id === post.id
+        ? { ...p, numComentarios: Math.max(0, (p.numComentarios || 0) - 1) } : p)));
+      toast('Comentario eliminado');
+    } catch {
+      toast('No se pudo borrar el comentario.', true);
     }
   }
 
@@ -196,6 +273,7 @@ export default function Admin() {
   const bote = pagos === null ? null : pagos.reduce((t, p) => t + (Number(p.monto) || 0), 0);
   const activos = (usuarios || []).filter((u) => u.estado === 'Activo').length;
   const iconos = Object.fromEntries(reto.actividades.map((a) => [a.id, a.icono]));
+  const fotosUsuarios = Object.fromEntries((usuarios || []).filter((u) => u.photoURL).map((u) => [u.id, u.photoURL]));
 
   return (
     <div className="app-shell">
@@ -293,6 +371,58 @@ export default function Admin() {
       </section>
 
       <section className="card">
+        <div className="card-head"><h2 className="card-title">Publicaciones del feed</h2></div>
+        {posts === null && <div className="rank-empty">Cargando publicaciones…</div>}
+        {posts !== null && !posts.length && <div className="rank-empty">Nadie ha publicado en este reto.</div>}
+        {(posts || []).map((p) => (
+          <div className={`admin-user ${postAbierto === p.id ? 'open' : ''}`} key={p.id}>
+            <button className="admin-user-head" type="button" onClick={() => togglePost(p)}>
+              <Avatar nombre={p.nombre} url={fotosUsuarios[p.usuarioId]} className="rank-av" />
+              <div className="admin-user-info">
+                <b>{p.nombre}</b>
+                <span>
+                  {hace(p.creadoEn)}
+                  {p.fotoURL ? ' · 📷 foto' : ''}
+                  {` · ${Object.keys(p.reacciones || {}).length} reacciones · ${p.numComentarios || 0} comentarios`}
+                </span>
+              </div>
+            </button>
+            {postAbierto === p.id && (
+              <div className="admin-user-body">
+                {p.texto && <p className="post-text" style={{ padding: '10px 14px 0' }}>{p.texto}</p>}
+                {p.fotoURL && (
+                  <img className="post-photo" src={p.fotoURL} alt="" loading="lazy" style={{ margin: '10px 14px 0', maxWidth: 'calc(100% - 28px)', borderRadius: '12px' }} />
+                )}
+                <div className="admin-actions">
+                  <button className="admin-btn" type="button" onClick={() => { vibrate(); setTextoPost(p.texto || ''); setModalEditarPost(p); }}>
+                    ✏️ Editar texto
+                  </button>
+                  <button className="admin-btn" type="button" onClick={() => { vibrate(); setModalBorrarPost(p); }}>
+                    🗑️ Eliminar publicación
+                  </button>
+                </div>
+                {(p.numComentarios || 0) > 0 && !comentarios[p.id] && (
+                  <div className="rank-empty" style={{ padding: '12px' }}>Cargando comentarios…</div>
+                )}
+                {(comentarios[p.id] || []).map((c) => (
+                  <div className="hist-row admin-hist" key={c.id}>
+                    <div className="hist-icon">💬</div>
+                    <div className="hist-info">
+                      <div className="hist-tipo">{c.nombre}</div>
+                      <div className="hist-meta">{c.texto}</div>
+                    </div>
+                    <div className="admin-row-actions">
+                      <button className="icon-btn danger" type="button" aria-label="Eliminar comentario" onClick={() => { vibrate(); borrarComentarioAdmin(p, c); }}>🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </section>
+
+      <section className="card">
         <div className="card-head">
           <h2 className="card-title">Pagos del bote</h2>
           <button className="admin-btn" type="button" onClick={() => { vibrate(); setModalPago(true); }}>＋ Pago</button>
@@ -343,10 +473,43 @@ export default function Admin() {
           <h2>¿Eliminar registro?</h2>
           <p>
             {modalBorrar && `${modalBorrar.usuario.nombre} · ${modalBorrar.registro.fecha} · ${modalBorrar.registro.tipo}. `}
-            El espejo de Google Sheets no se actualiza al borrar: ajústalo a mano si aplica.
+            También se eliminará su fila en la hoja de Google Sheets.
           </p>
           <button className="btn-dark" type="button" onClick={borrarRegistro}>Sí, eliminar</button>
           <button className="btn-secondary" type="button" onClick={() => setModalBorrar(null)}>Cancelar</button>
+        </div>
+      </div>
+
+      {/* Modal editar publicación */}
+      <div className={`modal-overlay ${modalEditarPost ? 'show' : ''}`}>
+        <div className="modal" style={{ textAlign: 'left' }}>
+          {modalEditarPost && (
+            <>
+              <h2 style={{ textAlign: 'center' }}>Editar publicación</h2>
+              <p style={{ textAlign: 'center' }}>{modalEditarPost.nombre}</p>
+              <form onSubmit={guardarPost}>
+                <div className="field">
+                  <label className="field-label">Texto</label>
+                  <textarea rows="4" maxLength="500" value={textoPost} onChange={(e) => setTextoPost(e.target.value)} />
+                </div>
+                <button className="btn-dark" type="submit" disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar cambios'}</button>
+                <button className="btn-secondary" type="button" onClick={() => setModalEditarPost(null)}>Cancelar</button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Modal confirmar borrado de publicación */}
+      <div className={`modal-overlay ${modalBorrarPost ? 'show' : ''}`}>
+        <div className="modal">
+          <h2>¿Eliminar publicación?</h2>
+          <p>
+            {modalBorrarPost && `Publicación de ${modalBorrarPost.nombre}. `}
+            Se borrará para todo el equipo, con sus comentarios y reacciones. Esta acción no se puede deshacer.
+          </p>
+          <button className="btn-dark" type="button" onClick={borrarPost}>Sí, eliminar</button>
+          <button className="btn-secondary" type="button" onClick={() => setModalBorrarPost(null)}>Cancelar</button>
         </div>
       </div>
 
