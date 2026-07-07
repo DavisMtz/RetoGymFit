@@ -48,9 +48,9 @@ service cloud.firestore {
           && request.resource.data.estado == 'Activo';
         allow update: if request.auth != null
           && request.auth.token.email != null
-          // solo campos de sesión + foto de perfil, nada más
+          // solo campos de sesión + foto de perfil + token de push, nada más
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'photoURL'])
+               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'photoURL', 'fcmToken'])
           // reclamar solo si está libre, o si ya eres el dueño
           && (!('authUid' in resource.data) || resource.data.authUid == null
               || resource.data.authUid == request.auth.uid)
@@ -59,7 +59,11 @@ service cloud.firestore {
           // string corto y acotado para evitar abusos
           && (!('fotoPerfil' in request.resource.data)
               || (request.resource.data.fotoPerfil is string
-                  && request.resource.data.fotoPerfil.size() <= 2000));
+                  && request.resource.data.fotoPerfil.size() <= 2000))
+          // token de FCM para notificaciones push (string acotado)
+          && (!('fcmToken' in request.resource.data)
+              || (request.resource.data.fcmToken is string
+                  && request.resource.data.fcmToken.size() <= 512));
       }
 
       match /registros/{registroId} {

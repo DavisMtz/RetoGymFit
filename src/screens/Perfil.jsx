@@ -8,6 +8,7 @@ import { useToast, vibrate, Avatar, Header, StatusStrip } from '../components/ui
 import ReglasSheet from '../components/Reglas';
 import { obtenerHistorial, contarPorTipo } from '../data/queries';
 import { subirAvatar, borrarAvatar } from '../lib/avatar';
+import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
 import { calcularRacha } from '../lib/dates';
 
 export default function Perfil() {
@@ -28,6 +29,35 @@ export default function Perfil() {
   const [pass2, setPass2] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [pushOk, setPushOk] = useState(false);
+  const [pushActivo, setPushActivo] = useState(Boolean(usuario.fcmToken));
+  const [pushCargando, setPushCargando] = useState(false);
+
+  useEffect(() => { pushDisponible().then(setPushOk); }, []);
+
+  async function togglePush() {
+    if (pushCargando) return;
+    vibrate();
+    setPushCargando(true);
+    try {
+      if (pushActivo) {
+        await desactivarPush(reto.id, usuario.id);
+        refrescarUsuario?.({ fcmToken: null });
+        setPushActivo(false);
+        toast('Notificaciones desactivadas');
+      } else {
+        await activarPush(reto.id, usuario.id);
+        refrescarUsuario?.({ fcmToken: 'ok' });
+        setPushActivo(true);
+        vibrate([30, 40, 30]);
+        toast('Notificaciones activadas ✓');
+      }
+    } catch (err) {
+      toast(err?.message || 'No se pudieron activar las notificaciones.', true);
+    } finally {
+      setPushCargando(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -183,6 +213,20 @@ export default function Perfil() {
               Quitar foto
               <span className="pr-sub">Vuelve a mostrar tus iniciales</span>
             </span>
+          </button>
+        )}
+        {pushOk && (
+          <button className="pref-row" type="button" onClick={togglePush} disabled={pushCargando}>
+            <span className="pr-icon">{pushActivo ? '🔔' : '🔕'}</span>
+            <span className="pr-text">
+              Notificaciones push
+              <span className="pr-sub">
+                {pushCargando ? 'Configurando…' : pushActivo
+                  ? 'Activadas — te avisamos si vas atrasado en la semana'
+                  : 'Recibe recordatorios para no multar'}
+              </span>
+            </span>
+            <span className={`honor-switch ${pushActivo ? 'push-on' : ''}`} style={{ pointerEvents: 'none' }} />
           </button>
         )}
         <button className="pref-row" type="button" onClick={() => { vibrate(); setModalPass(true); setError(''); }}>

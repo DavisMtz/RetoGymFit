@@ -8,3 +8,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 );
+
+// PWA: registra el service worker (caché del shell + notificaciones push).
+// Solo en producción — en dev, Vite sirve los módulos sin build.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* sin SW la app sigue funcionando */ });
+  });
+}
