@@ -1,12 +1,13 @@
 /**
  * Perfil: identidad del atleta, días justificados disponibles,
- * cambio de contraseña y cierre de sesión.
+ * reglamento, foto de perfil, cambio de contraseña y cierre de sesión.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Avatar, Header, StatusStrip } from '../components/ui';
+import ReglasSheet from '../components/Reglas';
 import { obtenerHistorial, contarPorTipo } from '../data/queries';
-import { subirAvatar } from '../lib/avatar';
+import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { calcularRacha } from '../lib/dates';
 
 export default function Perfil() {
@@ -19,8 +20,10 @@ export default function Perfil() {
   const [totalDias, setTotalDias] = useState(0);
   const [vacaciones, setVacaciones] = useState(null);
   const [periodo, setPeriodo] = useState(null);
+  const [reglas, setReglas] = useState(false);
   const [modalPass, setModalPass] = useState(false);
   const [modalSalir, setModalSalir] = useState(false);
+  const [modalQuitarFoto, setModalQuitarFoto] = useState(false);
   const [pass1, setPass1] = useState('');
   const [pass2, setPass2] = useState('');
   const [error, setError] = useState('');
@@ -65,7 +68,7 @@ export default function Perfil() {
   }
 
   function elegirFoto() {
-    if (subiendoFoto) return;
+    if (subiendo) return;
     vibrate();
     fileRef.current?.click();
   }
@@ -74,29 +77,32 @@ export default function Perfil() {
     const file = e.target.files?.[0];
     e.target.value = ''; // permite re-elegir el mismo archivo
     if (!file) return;
-    setSubiendoFoto(true);
+    setSubiendo(true);
     try {
-      const blob = await comprimirFoto(file);
-      await actualizarFoto(blob);
+      const url = await subirAvatar(reto.id, usuario.id, file);
+      setFoto(url);
+      refrescarUsuario?.({ photoURL: url });
       vibrate([30, 40, 30]);
       toast('Foto de perfil actualizada ✓');
-    } catch (err) {
-      toast(err?.message || 'No se pudo actualizar la foto.', true);
+    } catch {
+      toast('No se pudo subir la foto. Intenta otra.', true);
     } finally {
-      setSubiendoFoto(false);
+      setSubiendo(false);
     }
   }
 
   async function quitarFoto() {
     setModalQuitarFoto(false);
-    setSubiendoFoto(true);
+    setSubiendo(true);
     try {
-      await actualizarFoto(null);
+      await borrarAvatar(reto.id, usuario.id);
+      setFoto(null);
+      refrescarUsuario?.({ photoURL: null });
       toast('Foto eliminada');
     } catch {
       toast('No se pudo quitar la foto.', true);
     } finally {
-      setSubiendoFoto(false);
+      setSubiendo(false);
     }
   }
 
@@ -109,7 +115,7 @@ export default function Perfil() {
         <button
           type="button"
           className="profile-av-btn"
-          onClick={() => { if (!subiendo) fileRef.current?.click(); }}
+          onClick={elegirFoto}
           aria-label="Cambiar foto de perfil"
         >
           <Avatar nombre={usuario.nombre} url={foto} className="profile-av" />
@@ -120,23 +126,7 @@ export default function Perfil() {
           type="file"
           accept="image/*"
           style={{ display: 'none' }}
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (!file) return;
-            setSubiendo(true);
-            vibrate();
-            try {
-              const url = await subirAvatar(reto.id, usuario.id, file);
-              setFoto(url);
-              refrescarUsuario?.({ photoURL: url });
-              toast('Foto actualizada ✓');
-            } catch {
-              toast('No se pudo subir la foto. Intenta otra.', true);
-            } finally {
-              setSubiendo(false);
-            }
-          }}
+          onChange={onFotoSeleccionada}
         />
         <h1 className="profile-name">{usuario.nombre}</h1>
         <div className="profile-reto">{reto.nombre} · {reto.subtitulo}</div>
@@ -154,6 +144,13 @@ export default function Perfil() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Tu reto</h2></div>
+        <button className="pref-row" type="button" onClick={() => { vibrate(); setReglas(true); }}>
+          <span className="pr-icon">📖</span>
+          <span className="pr-text">
+            Reglamento del reto
+            <span className="pr-sub">Tiempos, evidencias, multas, premios y más</span>
+          </span>
+        </button>
         <button className="pref-row" type="button" style={{ cursor: 'default' }}>
           <span className="pr-icon">🎯</span>
           <span className="pr-text">
@@ -172,15 +169,15 @@ export default function Perfil() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Cuenta</h2></div>
-        <button className="pref-row" type="button" onClick={elegirFoto} disabled={subiendoFoto}>
+        <button className="pref-row" type="button" onClick={elegirFoto} disabled={subiendo}>
           <span className="pr-icon">📷</span>
           <span className="pr-text">
-            {usuario.fotoPerfil ? 'Cambiar foto de perfil' : 'Añadir foto de perfil'}
-            <span className="pr-sub">{subiendoFoto ? 'Procesando imagen…' : 'También puedes tocar tu avatar'}</span>
+            {foto ? 'Cambiar foto de perfil' : 'Añadir foto de perfil'}
+            <span className="pr-sub">{subiendo ? 'Procesando imagen…' : 'También puedes tocar tu avatar'}</span>
           </span>
         </button>
-        {usuario.fotoPerfil && (
-          <button className="pref-row" type="button" onClick={() => { vibrate(); setModalQuitarFoto(true); }} disabled={subiendoFoto}>
+        {foto && (
+          <button className="pref-row" type="button" onClick={() => { vibrate(); setModalQuitarFoto(true); }} disabled={subiendo}>
             <span className="pr-icon">🗑️</span>
             <span className="pr-text">
               Quitar foto
@@ -203,6 +200,8 @@ export default function Perfil() {
           </span>
         </button>
       </section>
+
+      <ReglasSheet reto={reto} abierto={reglas} onClose={() => setReglas(false)} />
 
       {/* Modal cambiar contraseña */}
       <div className={`modal-overlay ${modalPass ? 'show' : ''}`}>

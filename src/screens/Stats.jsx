@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useToast, Header, StatusStrip } from '../components/ui';
+import { useToast, Header, StatusStrip, useCountUp } from '../components/ui';
 import { obtenerHistorial } from '../data/queries';
 import { calcularRacha, mejorRacha, semanaISO, anioISO, hoyMX, lunesDe, sumarDias } from '../lib/dates';
 
@@ -60,6 +60,10 @@ export default function Stats() {
     };
   }, [registros, reto]);
 
+  const diasAnim = useCountUp(stats ? stats.totalDias : null, 900);
+  const kcalAnim = useCountUp(stats ? stats.totalKcal : null, 1500);
+  const hrsAnim = useCountUp(stats ? Math.round(stats.totalMin / 60) : null, 1200);
+
   return (
     <div className="app-shell">
       <Header reto={reto} />
@@ -77,7 +81,7 @@ export default function Stats() {
         <>
           <div className="stats-grid">
             <div className="stat-tile" style={{ animationDelay: '0.05s' }}>
-              <div className="st-num">{stats.totalDias}</div>
+              <div className="st-num">{Math.round(diasAnim)}</div>
               <div className="st-label">Días cumplidos<br />en total</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.12s' }}>
@@ -85,11 +89,11 @@ export default function Stats() {
               <div className="st-label">Racha<br />actual 🔥</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.19s' }}>
-              <div className="st-num">{stats.totalKcal.toLocaleString('es-MX')}</div>
+              <div className="st-num">{Math.round(kcalAnim).toLocaleString('es-MX')}</div>
               <div className="st-label">Kcal quemadas<br />acumuladas</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.26s' }}>
-              <div className="st-num">{Math.round(stats.totalMin / 60)}<small>hrs</small></div>
+              <div className="st-num">{Math.round(hrsAnim)}<small>hrs</small></div>
               <div className="st-label">Horas de<br />entrenamiento</div>
             </div>
             <div className="stat-tile" style={{ animationDelay: '0.33s' }}>

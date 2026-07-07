@@ -4,6 +4,7 @@
  * del reto y se guarda en Firestore; después se replica a Google Sheets.
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots } from '../components/ui';
@@ -53,6 +54,7 @@ export default function Hoy() {
   const [semana, setSemana] = useState(null);
   const [racha, setRacha] = useState(0);
   const [diasSemana, setDiasSemana] = useState(0);
+  const [posicion, setPosicion] = useState(null); // { pos, total, rival, faltan }
 
   const [tipo, setTipo] = useState('');
   const [horas, setHoras] = useState('');
@@ -81,6 +83,19 @@ export default function Hoy() {
     setSemana(diasDeSemana(hoyMX()).map((fecha) => ({ fecha, estatus: dias[fecha] || 'sin registro' })));
     const mio = ranking.find((r) => r.usuarioId === usuario.id);
     setDiasSemana(mio ? mio.dias : 0);
+    // Posición competitiva de la semana: dónde vas y a quién puedes cazar
+    const idx = ranking.findIndex((r) => r.usuarioId === usuario.id);
+    if (idx !== -1 && ranking.length > 1) {
+      const rival = idx > 0 ? ranking[idx - 1] : ranking[1];
+      setPosicion({
+        pos: idx + 1,
+        total: ranking.length,
+        rival: rival.nombre.split(' ')[0],
+        faltan: idx > 0 ? rival.dias - ranking[idx].dias : ranking[0].dias - rival.dias,
+      });
+    } else {
+      setPosicion(null);
+    }
   }, [reto, usuario]);
 
   useEffect(() => { cargar().catch(() => toast('Error al cargar tus datos', true)); }, [cargar, toast]);
@@ -195,6 +210,20 @@ export default function Hoy() {
         )}
         {semana && <WeekDots semana={semana} />}
       </div>
+
+      {posicion && (
+        <Link to="/ranking" className="posicion-strip" onClick={() => vibrate(12)}>
+          <span className="posicion-badge">#{posicion.pos}</span>
+          <span className="posicion-text">
+            {posicion.pos === 1
+              ? <>Lideras la semana{posicion.faltan > 0 ? <> con <b>{posicion.faltan} día{posicion.faltan !== 1 ? 's' : ''}</b> de ventaja sobre <b>{posicion.rival}</b></> : <> — <b>{posicion.rival}</b> te pisa los talones</>}.</>
+              : posicion.faltan > 0
+                ? <>Vas <b>#{posicion.pos}</b> de {posicion.total} — a <b>{posicion.faltan} día{posicion.faltan !== 1 ? 's' : ''}</b> de cazar a <b>{posicion.rival}</b>.</>
+                : <>Vas <b>#{posicion.pos}</b> de {posicion.total} — empate en días con <b>{posicion.rival}</b>: las kcal deciden.</>}
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+        </Link>
+      )}
 
       {peligro && (
         <div className={`danger-strip ${peligro.critico ? 'critical' : ''}`}>
