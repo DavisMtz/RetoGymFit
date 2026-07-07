@@ -171,14 +171,14 @@ export async function obtenerRankingMensual(reto) {
   return agregarRanking(snap.docs, reto.metaDiasSemana, null);
 }
 
-/** Actividad reciente para el ticker */
+/** Actividad reciente para el ticker (sin Periodo Menstrual, por privacidad) */
 export async function obtenerActividadReciente(retoId, max = 8) {
   const q = query(col(retoId, 'registros'), orderBy('creadoEn', 'desc'), limit(20));
   const snap = await getDocs(q);
   const ahora = Date.now();
   return snap.docs
     .map((d) => d.data())
-    .filter((r) => r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO')
+    .filter((r) => (r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO') && r.tipo !== 'Periodo Menstrual')
     .slice(0, max)
     .map((r) => {
       const t = r.creadoEn?.toDate ? r.creadoEn.toDate().getTime() : ahora;

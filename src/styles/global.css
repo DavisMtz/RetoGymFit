@@ -1017,6 +1017,29 @@ input:disabled { opacity: 0.55; }
 .ib-btn:active { transform: scale(0.94); }
 .ib-btn.primary { background: var(--acc); border-color: var(--acc); color: var(--on-acc); font-weight: 700; box-shadow: 0 6px 16px -6px var(--acc-glow); }
 
+/* ——— Visor de avatar (tocar la foto de alguien) ——— */
+.avatar-ampliable { display: block; padding: 0; border: none; background: none; cursor: pointer; border-radius: 50%; flex-shrink: 0; }
+.avatar-ampliable:active { transform: scale(0.92); }
+.visor-avatar {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 24px;
+}
+.visor-avatar-foto {
+  width: min(78vw, 340px); height: min(78vw, 340px); border-radius: 50%;
+  object-fit: cover; box-shadow: 0 0 0 3px var(--acc), 0 30px 80px -20px rgba(0, 0, 0, 0.9), 0 0 60px -20px var(--acc-glow);
+}
+.visor-avatar-foto.iniciales {
+  background: var(--acc); color: var(--on-acc); display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: clamp(64px, 22vw, 110px);
+}
+.visor-avatar-nombre { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; text-align: center; }
+
+.jackpot { cursor: pointer; }
+.jackpot:active { transform: scale(0.99); }
+
 /* ——— Micro-interacciones extra ——— */
 .tab-item:active { transform: scale(0.9); }
 .pbadge { opacity: 0; animation: pop 0.45s var(--spring) forwards; }

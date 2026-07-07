@@ -12,7 +12,7 @@ import {
   obtenerComentarios, comentarPost, borrarComentario, obtenerUsuariosActivos,
 } from '../data/queries';
 import { subirFotoFeed } from '../lib/feedFoto';
-import { abrirLightbox } from '../lib/anim';
+import { abrirLightbox, punch } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
@@ -67,7 +67,7 @@ function Comentarios({ reto, post, usuario, fotos }) {
       {comentarios === null && <div className="post-comments-loading">Cargando comentarios…</div>}
       {(comentarios || []).map((c) => (
         <div className="comment" key={c.id}>
-          <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" />
+          <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" ampliable />
           <div className="comment-bubble">
             <b>{c.nombre.split(' ').slice(0, 2).join(' ')}</b>
             <p>{c.texto}</p>
@@ -144,8 +144,9 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
     return c;
   }, [post.reacciones]);
 
-  async function reaccionar(emoji) {
+  async function reaccionar(emoji, el) {
     vibrate(18);
+    if (el) punch(el, 1.35);
     try {
       await reaccionarPost(reto.id, post, usuario, miReaccion === emoji ? null : emoji);
       // onSnapshot refresca el post solo; no hace falta estado local
@@ -159,7 +160,7 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
   return (
     <article className="post">
       <header className="post-head">
-        <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="post-av" />
+        <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="post-av" ampliable />
         <div className="post-author">
           <b>{post.nombre}</b>
           <span>{hace(post.creadoEn)}</span>
@@ -188,7 +189,7 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
               key={e}
               type="button"
               className={`reaction-chip ${miReaccion === e ? 'mine' : ''} ${conteos[e] ? 'has' : ''}`}
-              onClick={() => reaccionar(e)}
+              onClick={(ev) => reaccionar(e, ev.currentTarget)}
             >
               {e}{conteos[e] ? <b>{conteos[e]}</b> : null}
             </button>

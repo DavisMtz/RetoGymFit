@@ -14,10 +14,17 @@ import { gsap } from 'gsap';
 const reducido = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+// Capas flotantes que NUNCA deben entrar en la cascada de página:
+// los modales/hojas viven ocultos en el DOM (opacity 0) y animarlos
+// los haría parpadear al cambiar de sección.
+const SELECTOR_FLOTANTES = '.modal-overlay, .sheet-overlay, .lightbox, .toast, .instalar-banner';
+
 /** Transición de página: los hijos directos del contenedor entran en cascada. */
 export function entradaPagina(contenedor) {
   if (!contenedor || reducido()) return undefined;
-  const hijos = Array.from(contenedor.children).slice(0, 10);
+  const hijos = Array.from(contenedor.children)
+    .filter((el) => !el.matches(SELECTOR_FLOTANTES))
+    .slice(0, 10);
   if (!hijos.length) return undefined;
   const tl = gsap.timeline();
   tl.fromTo(
@@ -80,4 +87,21 @@ export function salidaBanner(el) {
   return new Promise((resolve) => {
     gsap.to(el, { y: 110, opacity: 0, duration: 0.35, ease: 'power2.in', onComplete: resolve });
   });
+}
+
+/** Micro-interacción "punch": el elemento late al tocarlo (reacciones, tabs). */
+export function punch(el, escala = 1.25) {
+  if (!el || reducido()) return;
+  gsap.fromTo(el, { scale: 1 }, {
+    scale: escala, duration: 0.14, ease: 'power2.out',
+    yoyo: true, repeat: 1, transformOrigin: 'center',
+    onComplete: () => gsap.set(el, { clearProps: 'transform' }),
+  });
+}
+
+/** Apertura del visor de avatar: zoom elástico de la foto + nombre. */
+export function abrirAvatar(el, nombre) {
+  if (reducido()) return;
+  if (el) gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.8)' });
+  if (nombre) gsap.fromTo(nombre, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, delay: 0.1, ease: 'power2.out' });
 }

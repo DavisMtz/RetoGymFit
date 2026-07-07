@@ -1,8 +1,10 @@
 /** Componentes de UI compartidos */
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DIAS_CORTOS, hoyMX, semanaISO, diasHasta } from '../lib/dates';
+import { abrirAvatar, punch } from '../lib/anim';
 import ReglasSheet from './Reglas';
 
 export const vibrate = (ms = 25) => { if (navigator.vibrate) navigator.vibrate(ms); };
@@ -12,20 +14,62 @@ export function getInitials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map((n) => n[0]).join('').toUpperCase();
 }
 
+/** Visor a pantalla completa de la foto de perfil de alguien. */
+function VisorAvatar({ nombre, url, onClose }) {
+  const fotoRef = useRef(null);
+  const nombreRef = useRef(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    abrirAvatar(fotoRef.current, nombreRef.current);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="visor-avatar show" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Foto de ${nombre}`}>
+      {url
+        ? <img ref={fotoRef} className="visor-avatar-foto" src={url} alt={nombre} onClick={(e) => e.stopPropagation()} />
+        : <div ref={fotoRef} className="visor-avatar-foto iniciales" onClick={(e) => e.stopPropagation()}>{getInitials(nombre)}</div>}
+      <div ref={nombreRef} className="visor-avatar-nombre">{nombre}</div>
+    </div>,
+    document.body,
+  );
+}
+
 /** Avatar: muestra la foto de perfil si existe, o las iniciales como respaldo.
- *  Aplica className para heredar el tamaño/estilo del contexto (rank-av, etc.). */
-export function Avatar({ nombre, url, className = '', style }) {
-  if (url) {
-    return (
+ *  Aplica className para heredar el tamaño/estilo del contexto (rank-av, etc.).
+ *  Con `ampliable`, tocarlo abre la foto en grande (no usar dentro de <button>). */
+export function Avatar({ nombre, url, className = '', style, ampliable = false }) {
+  const [abierto, setAbierto] = useState(false);
+
+  const contenido = url
+    ? (
       <div
         className={className}
         style={{ ...style, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
         role="img"
         aria-label={nombre}
       />
-    );
-  }
-  return <div className={className} style={style}>{getInitials(nombre)}</div>;
+    )
+    : <div className={className} style={style}>{getInitials(nombre)}</div>;
+
+  if (!ampliable) return contenido;
+  return (
+    <>
+      <button
+        type="button"
+        className="avatar-ampliable"
+        aria-label={`Ver foto de ${nombre}`}
+        onClick={(e) => { e.stopPropagation(); vibrate(12); setAbierto(true); }}
+      >
+        {contenido}
+      </button>
+      {abierto && <VisorAvatar nombre={nombre} url={url} onClose={() => setAbierto(false)} />}
+    </>
+  );
 }
 
 // ——————————————————————————————— Toast
@@ -166,7 +210,7 @@ export function TabBar() {
             to={t.to}
             end={t.to === '/'}
             className={({ isActive }) => `tab-item ${isActive ? 'active' : ''}`}
-            onClick={() => vibrate(15)}
+            onClick={(e) => { vibrate(15); punch(e.currentTarget.querySelector('svg'), 1.3); }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{t.icon}</svg>
             <span>{t.label}</span>

@@ -42,9 +42,11 @@ function enviarNotificacionesSociales() {
       difundir_(usuarios, p.authUid, '📣 ' + primerNombre_(p.nombre) + ' publicó en el feed', cuerpo, retoId);
     });
 
-    // 2) Registros de actividad nuevos
+    // 2) Registros de actividad nuevos (el Periodo Menstrual no se anuncia,
+    //    por privacidad — igual que en el ticker de la app)
     consultarDesde_(retoId, 'registros', desde).forEach(function (r) {
       if (r.estatus !== 'CUMPLE' && r.estatus !== 'JUSTIFICADO') return;
+      if (r.tipo === 'Periodo Menstrual') return;
       var authUid = null; // los registros no guardan authUid; excluye por usuarioId
       var cuerpo = r.tipo + (Number(r.calorias) > 0 ? ' · ' + r.calorias + ' kcal' : '') + ' — ¡síguele el paso!';
       usuarios.forEach(function (u) {

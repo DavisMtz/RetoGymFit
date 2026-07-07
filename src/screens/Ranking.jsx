@@ -2,6 +2,7 @@
  * Ranking: clasificación semanal/mensual, bote acumulado y actividad reciente.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Avatar, Header, StatusStrip, RankSkeleton, useCountUp } from '../components/ui';
 import { entradaPodio } from '../lib/anim';
@@ -92,7 +93,19 @@ export default function Ranking() {
       <Header reto={reto} />
       <StatusStrip />
 
-      <div className="jackpot">
+      <div
+        className="jackpot"
+        onClick={(e) => {
+          // Micro-interacción: tocar el bote suelta billetitos 💸
+          vibrate(20);
+          const r = e.currentTarget.getBoundingClientRect();
+          confetti({
+            particleCount: 30, spread: 70, startVelocity: 22, gravity: 0.9,
+            origin: { x: (r.left + r.width / 2) / window.innerWidth, y: (r.top + r.height / 2) / window.innerHeight },
+            colors: ['#d4ff00', '#4ade80', '#ffd84d', '#ffffff'],
+          });
+        }}
+      >
         <div className="jackpot-eyebrow">Bote acumulado</div>
         <div className="jackpot-amount">
           <sup>$</sup>
@@ -136,7 +149,7 @@ export default function Ranking() {
                 >
                   {pos === 0 && <div className="podium-crown">👑</div>}
                   <div className="podium-av-wrap">
-                    <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="podium-av" />
+                    <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="podium-av" ampliable />
                   </div>
                   <div className="podium-name">{r.nombre.split(' ')[0]}</div>
                   <div className="podium-kcal">{(r.calorias || 0).toLocaleString('es-MX')} kcal{r.puntosExtra > 0 ? ' · ⭐' : ''}</div>
@@ -160,7 +173,7 @@ export default function Ranking() {
               style={{ animationDelay: `${Math.min(0.3 + i * 0.06, 0.8)}s` }}
             >
               <div className="rank-pos">{i + 4}</div>
-              <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="rank-av" />
+              <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="rank-av" ampliable />
               <div className="rank-info">
                 <div className="rank-name">{r.nombre}</div>
                 <div className="rank-cal">
