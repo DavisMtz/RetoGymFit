@@ -12,6 +12,7 @@ import {
   obtenerComentarios, comentarPost, borrarComentario, obtenerUsuariosActivos,
 } from '../data/queries';
 import { subirFotoFeed } from '../lib/feedFoto';
+import { abrirLightbox, punch } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
@@ -42,7 +43,7 @@ function Comentarios({ reto, post, usuario, fotos }) {
     setEnviando(true);
     vibrate(20);
     try {
-      await comentarPost(reto.id, post.id, usuario, t);
+      await comentarPost(reto.id, post, usuario, t);
       setTexto('');
       setComentarios(await obtenerComentarios(reto.id, post.id));
     } catch {
@@ -66,7 +67,7 @@ function Comentarios({ reto, post, usuario, fotos }) {
       {comentarios === null && <div className="post-comments-loading">Cargando comentarios…</div>}
       {(comentarios || []).map((c) => (
         <div className="comment" key={c.id}>
-          <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" />
+          <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" ampliable />
           <div className="comment-bubble">
             <b>{c.nombre.split(' ').slice(0, 2).join(' ')}</b>
             <p>{c.texto}</p>
@@ -96,13 +97,17 @@ function Comentarios({ reto, post, usuario, fotos }) {
 
 /** Visor de foto a pantalla completa */
 function Lightbox({ foto, onClose }) {
-  // Bloquea el scroll del fondo y cierra con Escape
+  const imgRef = useRef(null);
+  const captionRef = useRef(null);
+
+  // Bloquea el scroll del fondo, cierra con Escape y anima la entrada (GSAP)
   useEffect(() => {
     if (!foto) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
+    abrirLightbox(imgRef.current, captionRef.current);
     return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
   }, [foto, onClose]);
 
@@ -111,8 +116,8 @@ function Lightbox({ foto, onClose }) {
     <div className={`lightbox ${foto ? 'show' : ''}`} onClick={onClose} role="dialog" aria-modal="true" aria-label="Foto a pantalla completa">
       {foto && (
         <>
-          <img className="lightbox-img" src={foto.url} alt="" onClick={(e) => e.stopPropagation()} />
-          <div className="lightbox-caption" onClick={(e) => e.stopPropagation()}>
+          <img ref={imgRef} className="lightbox-img" src={foto.url} alt="" onClick={(e) => e.stopPropagation()} />
+          <div ref={captionRef} className="lightbox-caption" onClick={(e) => e.stopPropagation()}>
             <b>{foto.nombre}</b>
             {foto.texto && <p>{foto.texto}</p>}
           </div>
@@ -139,10 +144,11 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
     return c;
   }, [post.reacciones]);
 
-  async function reaccionar(emoji) {
+  async function reaccionar(emoji, el) {
     vibrate(18);
+    if (el) punch(el, 1.35);
     try {
-      await reaccionarPost(reto.id, post.id, miReaccion === emoji ? null : emoji);
+      await reaccionarPost(reto.id, post, usuario, miReaccion === emoji ? null : emoji);
       // onSnapshot refresca el post solo; no hace falta estado local
     } catch {
       toast('No se pudo reaccionar.', true);
@@ -154,7 +160,7 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
   return (
     <article className="post">
       <header className="post-head">
-        <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="post-av" />
+        <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="post-av" ampliable />
         <div className="post-author">
           <b>{post.nombre}</b>
           <span>{hace(post.creadoEn)}</span>
@@ -183,7 +189,7 @@ function Post({ reto, post, usuario, fotos, onBorrar, onVerFoto }) {
               key={e}
               type="button"
               className={`reaction-chip ${miReaccion === e ? 'mine' : ''} ${conteos[e] ? 'has' : ''}`}
-              onClick={() => reaccionar(e)}
+              onClick={(ev) => reaccionar(e, ev.currentTarget)}
             >
               {e}{conteos[e] ? <b>{conteos[e]}</b> : null}
             </button>

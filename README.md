@@ -133,6 +133,10 @@ configuración únicos:
    Cada día ~18:00 revisa quién va atrasado en la semana y le manda un
    recordatorio antes de que multe. `probarPush` envía una notificación de
    prueba a todos los tokens registrados.
+3. **Notificaciones sociales**: pega también `apps-script/PushSocial.gs` y
+   ejecuta una vez `instalarTriggerSocial`. Cada ~5 minutos avisa por push:
+   publicaciones nuevas del feed y registros de actividad (a todo el equipo),
+   y reacciones/comentarios a tu publicación (solo a ti).
 
 ## Registrar pagos (bote)
 

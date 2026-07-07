@@ -96,6 +96,25 @@ service cloud.firestore {
         allow write: if esAdmin();
       }
 
+      // ——— Eventos de notificación (reacciones/comentarios hacia otro):
+      // los crea el cliente y los consume/borra el emisor de push (Apps
+      // Script con la cuenta admin del espejo). Nadie más los lee.
+      match /eventos/{eventoId} {
+        allow read, update, delete: if esAdmin();
+        allow create: if request.auth != null
+          && request.auth.token.email != null
+          && request.resource.data.deAuthUid == request.auth.uid
+          && request.resource.data.tipo in ['reaccion', 'comentario']
+          && request.resource.data.deNombre is string
+          && request.resource.data.deNombre.size() <= 80
+          && request.resource.data.paraAuthUid is string
+          && request.resource.data.paraAuthUid.size() <= 128
+          && request.resource.data.detalle is string
+          && request.resource.data.detalle.size() <= 120
+          && request.resource.data.postTexto is string
+          && request.resource.data.postTexto.size() <= 80;
+      }
+
       // ——— Feed social: publicaciones con texto/foto, reacciones y comentarios.
       match /posts/{postId} {
         allow read: if request.auth != null;

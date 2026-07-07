@@ -171,14 +171,14 @@ export async function obtenerRankingMensual(reto) {
   return agregarRanking(snap.docs, reto.metaDiasSemana, null);
 }
 
-/** Actividad reciente para el ticker */
+/** Actividad reciente para el ticker (sin Periodo Menstrual, por privacidad) */
 export async function obtenerActividadReciente(retoId, max = 8) {
   const q = query(col(retoId, 'registros'), orderBy('creadoEn', 'desc'), limit(20));
   const snap = await getDocs(q);
   const ahora = Date.now();
   return snap.docs
     .map((d) => d.data())
-    .filter((r) => r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO')
+    .filter((r) => (r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO') && r.tipo !== 'Periodo Menstrual')
     .slice(0, max)
     .map((r) => {
       const t = r.creadoEn?.toDate ? r.creadoEn.toDate().getTime() : ahora;
@@ -298,12 +298,30 @@ export async function borrarPost(retoId, postId) {
   await deleteDoc(doc(db, 'retos', retoId, 'posts', postId));
 }
 
+/**
+ * Aviso para el emisor de notificaciones (Apps Script): se escribe un evento
+ * cuando reaccionas o comentas la publicación de OTRA persona. Fire-and-forget.
+ */
+function registrarEvento(retoId, post, usuario, tipo, detalle) {
+  if (!post?.authUid || post.authUid === auth.currentUser?.uid) return;
+  addDoc(col(retoId, 'eventos'), {
+    tipo,
+    deAuthUid: auth.currentUser.uid,
+    deNombre: usuario?.nombre || 'Alguien',
+    paraAuthUid: post.authUid,
+    detalle: String(detalle || '').slice(0, 120),
+    postTexto: String(post.texto || '').slice(0, 80),
+    creadoEn: serverTimestamp(),
+  }).catch(() => { /* la notificación es cortesía; no bloquea la acción */ });
+}
+
 /** Reacciona con un emoji, o pasa null para quitar tu reacción. */
-export async function reaccionarPost(retoId, postId, emoji) {
+export async function reaccionarPost(retoId, post, usuario, emoji) {
   const uid = auth.currentUser.uid;
-  await updateDoc(doc(db, 'retos', retoId, 'posts', postId), {
+  await updateDoc(doc(db, 'retos', retoId, 'posts', post.id), {
     [`reacciones.${uid}`]: emoji == null ? deleteField() : emoji,
   });
+  if (emoji != null) registrarEvento(retoId, post, usuario, 'reaccion', emoji);
 }
 
 export async function obtenerComentarios(retoId, postId) {
@@ -317,9 +335,9 @@ export async function obtenerComentarios(retoId, postId) {
 }
 
 /** Comenta y sube el contador del post en una sola operación atómica. */
-export async function comentarPost(retoId, postId, usuario, texto) {
+export async function comentarPost(retoId, post, usuario, texto) {
   const batch = writeBatch(db);
-  const comentarioRef = doc(collection(db, 'retos', retoId, 'posts', postId, 'comentarios'));
+  const comentarioRef = doc(collection(db, 'retos', retoId, 'posts', post.id, 'comentarios'));
   batch.set(comentarioRef, {
     usuarioId: usuario.id,
     authUid: auth.currentUser.uid,
@@ -327,8 +345,9 @@ export async function comentarPost(retoId, postId, usuario, texto) {
     texto,
     creadoEn: serverTimestamp(),
   });
-  batch.update(doc(db, 'retos', retoId, 'posts', postId), { numComentarios: increment(1) });
+  batch.update(doc(db, 'retos', retoId, 'posts', post.id), { numComentarios: increment(1) });
   await batch.commit();
+  registrarEvento(retoId, post, usuario, 'comentario', texto);
   return comentarioRef.id;
 }
 
