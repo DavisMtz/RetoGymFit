@@ -47,6 +47,36 @@ export async function sincronizarRegistro(reto, registro) {
 }
 
 /**
+ * Crea o ACTUALIZA la fila del registro en la hoja (ediciones del admin).
+ * A diferencia de `sincronizarRegistro`, si la fila ya existe la sobreescribe
+ * en lugar de ignorarla como duplicado.
+ */
+export async function sincronizarRegistroAdmin(reto, registro) {
+  if (!WEBHOOK_URL) return;
+  const payload = { accion: 'registro-upsert', retoId: reto.id, registro };
+  try {
+    await enviar(payload);
+  } catch {
+    guardarCola([...leerCola(), payload]);
+  }
+}
+
+/** Elimina la fila del registro en la hoja (borrados del admin). */
+export async function borrarRegistroSheet(reto, registro) {
+  if (!WEBHOOK_URL) return;
+  const payload = {
+    accion: 'registro-borrar',
+    retoId: reto.id,
+    registro: { nombre: registro.nombre, fecha: registro.fecha },
+  };
+  try {
+    await enviar(payload);
+  } catch {
+    guardarCola([...leerCola(), payload]);
+  }
+}
+
+/**
  * Lee los participantes de la pestaña "Usuarios" del Sheet del reto.
  * La hoja es la fuente viva: das de alta/baja gente editándola.
  */

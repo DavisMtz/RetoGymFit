@@ -107,6 +107,16 @@ Escribe en Firestore con la cuenta de servicio `admin-sync@retogymfit.app` (el �
 Flujo de datos:
 - **App → Firestore** (instantáneo, para fluidez) **y → Sheets** (webhook).
 - **Sheets → Firestore** (espejo onEdit + cada 15 min).
+- **Panel admin → Sheets**: al editar un registro desde el panel se **actualiza
+  la fila** correspondiente de la hoja (upsert), y al borrarlo se **elimina la
+  fila** — así no hay que capturar dos veces ni el espejo de 15 min revive
+  registros borrados. (Requiere volver a implementar el Web App con la versión
+  actual de `SheetsBridge.gs`: Implementar → Administrar implementaciones →
+  ✏️ → Nueva versión.)
+
+El panel admin también **modera el feed social**: puede editar el texto o
+eliminar publicaciones de cualquier participante (con sus comentarios y
+reacciones) y borrar comentarios individuales.
 
 ### 6. Publicar
 ```bash

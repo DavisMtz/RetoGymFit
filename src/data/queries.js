@@ -265,6 +265,30 @@ export async function adminBorrarPago(retoId, pagoId) {
   await deleteDoc(doc(db, 'retos', retoId, 'pagos', pagoId));
 }
 
+/** Publicaciones del feed (las más recientes primero) para moderación. */
+export async function adminObtenerPosts(retoId, max = 100) {
+  const q = query(col(retoId, 'posts'), orderBy('creadoEn', 'desc'), limit(max));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Edita el texto (u otros campos) de cualquier publicación. */
+export async function adminActualizarPost(retoId, postId, campos) {
+  await updateDoc(doc(db, 'retos', retoId, 'posts', postId), campos);
+}
+
+/**
+ * Borra una publicación de cualquier participante, incluidos sus comentarios
+ * (Firestore no borra subcolecciones en cascada).
+ */
+export async function adminBorrarPost(retoId, postId) {
+  const coms = await getDocs(collection(db, 'retos', retoId, 'posts', postId, 'comentarios'));
+  const batch = writeBatch(db);
+  coms.docs.forEach((c) => batch.delete(c.ref));
+  batch.delete(doc(db, 'retos', retoId, 'posts', postId));
+  await batch.commit();
+}
+
 // ——————————————————————————————— FEED SOCIAL
 // Publicaciones con texto/foto + reacciones (una por persona, llaveada por
 // authUid) + comentarios. Las reglas validan autoría; ver firestore.rules.
