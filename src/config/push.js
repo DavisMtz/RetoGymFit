@@ -8,4 +8,5 @@
  *
  * Mientras esté vacía, la app oculta la opción de notificaciones.
  */
-export const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY || '';
+export const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY
+  || 'BK5oNpG-l3zJGebiTRFVVJjxAFhrF5fSktlAX28rn2Imscw0sS-X4IUoerkK85TgFg0OVy77YHFbTd8dXSCUd9M';
