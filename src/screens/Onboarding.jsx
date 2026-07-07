@@ -31,10 +31,14 @@ function mensajeError(e) {
 }
 
 export default function Onboarding() {
-  const { crearCuenta, iniciarSesion } = useAuth();
+  const { crearCuenta, iniciarSesion, iniciarSesionAdmin } = useAuth();
   const toast = useToast();
 
   const [paso, setPaso] = useState(1);
+  const [modalAdmin, setModalAdmin] = useState(false);
+  const [passAdmin, setPassAdmin] = useState('');
+  const [errorAdmin, setErrorAdmin] = useState('');
+  const [entrandoAdmin, setEntrandoAdmin] = useState(false);
   const [reto, setReto] = useState(null);
   const [usuarios, setUsuarios] = useState(null);
   const [busqueda, setBusqueda] = useState('');
@@ -110,6 +114,20 @@ export default function Onboarding() {
     }
   }
 
+  async function entrarAdmin(e) {
+    e.preventDefault();
+    setErrorAdmin('');
+    if (!passAdmin) { setErrorAdmin('Escribe la contraseña de administrador.'); return; }
+    setEntrandoAdmin(true);
+    vibrate(40);
+    try {
+      await iniciarSesionAdmin(passAdmin);
+    } catch (err) {
+      setErrorAdmin(mensajeError(err));
+      setEntrandoAdmin(false);
+    }
+  }
+
   // ——— Paso 1: elegir reto
   if (paso === 1) {
     return (
@@ -135,6 +153,32 @@ export default function Onboarding() {
               <svg className="rc-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
             </button>
           ))}
+        </div>
+        <button className="admin-link" type="button" onClick={() => { vibrate(); setModalAdmin(true); setPassAdmin(''); setErrorAdmin(''); }}>
+          Acceso administrador
+        </button>
+
+        {/* Modal acceso admin */}
+        <div className={`modal-overlay ${modalAdmin ? 'show' : ''}`}>
+          <div className="modal">
+            <h2>Super usuario</h2>
+            <p>Ingresa la contraseña de administrador para gestionar el reto.</p>
+            <form onSubmit={entrarAdmin}>
+              <div className="field">
+                <input
+                  type="password"
+                  placeholder="Contraseña de admin"
+                  value={passAdmin}
+                  onChange={(e) => setPassAdmin(e.target.value)}
+                />
+              </div>
+              <p className="error-text">{errorAdmin}</p>
+              <button className="btn-dark" type="submit" disabled={entrandoAdmin}>
+                {entrandoAdmin ? 'Entrando…' : 'Entrar como admin'}
+              </button>
+              <button className="btn-secondary" type="button" onClick={() => setModalAdmin(false)}>Cancelar</button>
+            </form>
+          </div>
         </div>
       </div>
     );

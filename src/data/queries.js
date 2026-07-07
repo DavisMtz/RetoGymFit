@@ -8,7 +8,7 @@
  */
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
-  setDoc, updateDoc, serverTimestamp,
+  setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX, semanaISO, anioISO, mesMX, diasDeSemana, lunesDe, sumarDias } from '../lib/dates';
@@ -192,4 +192,74 @@ export async function obtenerActividadReciente(retoId, max = 8) {
 export async function obtenerBote(retoId) {
   const snap = await getDocs(col(retoId, 'pagos'));
   return snap.docs.reduce((total, d) => total + (parseFloat(d.data().monto) || 0), 0);
+}
+
+// ——————————————————————————————— ADMIN
+// Estas operaciones solo las autorizan las reglas para el super usuario
+// (admin@retogymfit.app); ver firestore.rules → esAdmin().
+
+/** Todos los participantes del reto, incluidos los dados de baja. */
+export async function adminObtenerUsuarios(retoId) {
+  const snap = await getDocs(col(retoId, 'usuarios'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+/** Actualiza campos arbitrarios de un participante (estado, nombre, etc.). */
+export async function adminActualizarUsuario(retoId, usuarioId, campos) {
+  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), campos);
+}
+
+/**
+ * Crea o sobrescribe el registro de un participante en cualquier fecha.
+ * Deriva semana/mes del `fecha` para mantener el ranking consistente.
+ */
+export async function adminGuardarRegistro(retoId, usuario, datos) {
+  const { fecha } = datos;
+  const registro = {
+    usuarioId: usuario.id,
+    nombre: usuario.nombre,
+    fecha,
+    semanaIso: semanaISO(fecha),
+    anioIso: anioISO(fecha),
+    mes: fecha.slice(0, 7),
+    tipo: datos.tipo,
+    minutos: Number(datos.minutos) || 0,
+    calorias: Number(datos.calorias) || 0,
+    evidencia: datos.evidencia ?? 'ADMIN',
+    estatus: datos.estatus,
+    notas: datos.notas || '',
+    creadoEn: serverTimestamp(),
+    editadoPorAdmin: true,
+  };
+  await setDoc(doc(db, 'retos', retoId, 'registros', idRegistro(usuario.id, fecha)), registro);
+  return registro;
+}
+
+export async function adminBorrarRegistro(retoId, registroId) {
+  await deleteDoc(doc(db, 'retos', retoId, 'registros', registroId));
+}
+
+/** Pagos del bote, más recientes primero. */
+export async function adminObtenerPagos(retoId) {
+  const snap = await getDocs(col(retoId, 'pagos'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+}
+
+export async function adminAgregarPago(retoId, pago) {
+  const ref = await addDoc(col(retoId, 'pagos'), {
+    fecha: pago.fecha,
+    usuario: pago.usuario,
+    monto: Number(pago.monto) || 0,
+    notas: pago.notas || '',
+    creadoEn: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function adminBorrarPago(retoId, pagoId) {
+  await deleteDoc(doc(db, 'retos', retoId, 'pagos', pagoId));
 }

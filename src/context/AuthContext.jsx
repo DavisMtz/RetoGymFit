@@ -22,6 +22,7 @@ import { getReto } from '../config/retos';
 import { obtenerUsuario, reclamarUsuario, marcarAcceso } from '../data/queries';
 
 const SESSION_KEY = 'rgf_session_v1';
+const ADMIN_EMAIL = 'admin@retogymfit.app';
 const AuthContext = createContext(null);
 
 function emailSintetico(retoId, usuarioId) {
@@ -71,6 +72,12 @@ export function AuthProvider({ children }) {
     let activo = true;
     (async () => {
       if (!sesion || !firebaseUser || firebaseUser.isAnonymous) { setUsuario(null); return; }
+      // Sesión de super usuario: no hay documento de participante que validar
+      if (sesion.admin) {
+        if (firebaseUser.email === ADMIN_EMAIL) setUsuario({ id: '__admin__', nombre: 'Administrador' });
+        else { localStorage.removeItem(SESSION_KEY); setSesion(null); setUsuario(null); }
+        return;
+      }
       const u = await obtenerUsuario(sesion.retoId, sesion.usuarioId);
       if (!activo) return;
       // La sesión solo es válida si este dispositivo es dueño del perfil
@@ -110,6 +117,15 @@ export function AuthProvider({ children }) {
     setSesion(s);
   }, []);
 
+  /** Acceso del super usuario administrador */
+  const iniciarSesionAdmin = useCallback(async (password) => {
+    const { user } = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+    const s = { admin: true };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    setFirebaseUser(user);
+    setSesion(s);
+  }, []);
+
   const cerrarSesion = useCallback(async () => {
     localStorage.removeItem(SESSION_KEY);
     setSesion(null);
@@ -127,13 +143,16 @@ export function AuthProvider({ children }) {
     setUsuario((u) => (u ? { ...u, ...campos } : u));
   }, []);
 
+  const esAdmin = Boolean(sesion?.admin && usuario);
   const value = {
     cargando,
-    autenticado: Boolean(usuario && reto),
+    autenticado: Boolean(usuario && reto) || esAdmin,
+    esAdmin,
     reto,
     usuario,
     crearCuenta,
     iniciarSesion,
+    iniciarSesionAdmin,
     cerrarSesion,
     cambiarPassword,
     refrescarUsuario,

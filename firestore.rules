@@ -18,10 +18,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Cuenta de servicio del espejo Sheets → Firestore (Apps Script).
+    // Escritura total: la cuenta de servicio del espejo Sheets → Firestore
+    // (Apps Script) y el super usuario administrador de la app.
     function esAdmin() {
       return request.auth != null
-        && request.auth.uid == 'tA0K0stZlMggm29ullJK5EQ4jGs1';
+        && (request.auth.uid == 'tA0K0stZlMggm29ullJK5EQ4jGs1'
+            || request.auth.token.email == 'admin@retogymfit.app');
     }
 
     match /retos/{retoId} {

@@ -320,7 +320,7 @@ body[data-reto='damas'] .brand-avatar-badge { background: linear-gradient(135deg
 /* ——— Form ——— */
 .field { margin-bottom: 14px; }
 .field-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--text-low); margin-bottom: 8px; font-weight: 600; font-family: var(--mono); }
-input[type='number'], input[type='password'], input[type='text'], textarea {
+input[type='number'], input[type='password'], input[type='text'], input[type='date'], select, textarea {
   width: 100%; padding: 14px 16px; background: var(--surface-2);
   border: 1px solid var(--border); border-radius: var(--r-md); color: var(--text-hi);
   font-family: inherit; font-size: 16px; font-weight: 500; outline: none;
@@ -328,7 +328,11 @@ input[type='number'], input[type='password'], input[type='text'], textarea {
 }
 textarea { resize: none; min-height: 70px; font-family: var(--serif); font-style: italic; font-size: 15px; }
 input::placeholder, textarea::placeholder { color: var(--text-muted); }
-input:focus, textarea:focus { border-color: var(--acc); background: var(--surface-3); box-shadow: 0 0 0 4px var(--acc-soft); }
+input:focus, select:focus, textarea:focus { border-color: var(--acc); background: var(--surface-3); box-shadow: 0 0 0 4px var(--acc-soft); }
+select { cursor: pointer; }
+select option { background: var(--surface-2); color: var(--text-hi); }
+input[type='date'] { color-scheme: dark; }
+input:disabled { opacity: 0.55; }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .field-with-unit { position: relative; }
 .field-with-unit::after {
@@ -826,6 +830,47 @@ input:focus, textarea:focus { border-color: var(--acc); background: var(--surfac
   text-align: center; font-family: var(--serif); font-style: italic; font-size: 14px;
   color: var(--text-low); margin: 18px 10px 8px; line-height: 1.6;
 }
+
+/* ——— Panel admin ——— */
+.admin-link {
+  margin-top: auto; padding: 18px 0 4px; background: none; border: none;
+  color: var(--text-muted); font-size: 11px; font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: 0.18em; cursor: pointer;
+  transition: color 0.25s; align-self: center;
+}
+.admin-link:hover { color: var(--acc); }
+
+.admin-user { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); margin-bottom: 8px; overflow: hidden; transition: border-color 0.3s; }
+.admin-user.open { border-color: var(--acc); }
+.admin-user-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;
+  background: transparent; border: none; cursor: pointer; text-align: left;
+  font-family: inherit; color: inherit;
+}
+.admin-user-head:active { background: var(--surface-3); }
+.admin-user-info { flex: 1; min-width: 0; }
+.admin-user-info b { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-user-info span { font-size: 10px; color: var(--text-low); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.admin-user-body { padding: 0 12px 12px; animation: rise 0.35s var(--soft); }
+.admin-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+.admin-btn {
+  flex: 1; padding: 10px 12px; background: var(--surface-3); border: 1px solid var(--border-strong);
+  border-radius: 12px; color: var(--text-hi); font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.25s var(--spring-soft); white-space: nowrap;
+}
+.admin-btn:hover { border-color: var(--acc); color: var(--acc); }
+.admin-btn:active { transform: scale(0.96); }
+.card-head .admin-btn { flex: 0 0 auto; }
+.admin-hist { background: var(--surface-1); }
+.admin-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: 10px; background: var(--surface-3);
+  border: 1px solid var(--border); cursor: pointer; display: grid; place-items: center;
+  font-size: 14px; transition: all 0.25s var(--spring-soft);
+}
+.icon-btn:hover { border-color: var(--acc); }
+.icon-btn.danger:hover { border-color: var(--danger); }
+.icon-btn:active { transform: scale(0.9); }
 
 /* ——— Micro-interacciones extra ——— */
 .tab-item:active { transform: scale(0.9); }

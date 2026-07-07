@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider, TabBar, AnimeIntro } from './components/ui';
 import { drenarCola } from './lib/sheets';
 import Onboarding from './screens/Onboarding';
+import Admin from './screens/Admin';
 import Hoy from './screens/Hoy';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
@@ -19,16 +20,16 @@ function Boot() {
 }
 
 function Shell() {
-  const { cargando, autenticado, reto, usuario } = useAuth();
+  const { cargando, autenticado, esAdmin, reto, usuario } = useAuth();
   const location = useLocation();
   const [intro, setIntro] = useState(false);
   const previo = useRef(autenticado);
 
   // Intro cinemática cuando pasas de "no autenticado" a "dentro"
   useEffect(() => {
-    if (autenticado && !previo.current) setIntro(true);
+    if (autenticado && !esAdmin && !previo.current) setIntro(true);
     previo.current = autenticado;
-  }, [autenticado]);
+  }, [autenticado, esAdmin]);
 
   // Tema del reto en el body + drenar cola de sincronización a Sheets
   useEffect(() => {
@@ -38,6 +39,7 @@ function Shell() {
 
   if (cargando) return <Boot />;
   if (!autenticado) return <Onboarding />;
+  if (esAdmin) return <Admin />;
 
   return (
     <>
