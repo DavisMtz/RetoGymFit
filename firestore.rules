@@ -96,15 +96,15 @@ service cloud.firestore {
         allow write: if esAdmin();
       }
 
-      // ——— Eventos de notificación (reacciones/comentarios hacia otro):
-      // los crea el cliente y los consume/borra el emisor de push (Apps
-      // Script con la cuenta admin del espejo). Nadie más los lee.
+      // ——— Eventos de notificación (reacciones, comentarios, menciones y
+      // high-fives hacia otro): los crea el cliente y los consume/borra el
+      // emisor de push (Apps Script, cuenta admin). Nadie más los lee.
       match /eventos/{eventoId} {
         allow read, update, delete: if esAdmin();
         allow create: if request.auth != null
           && request.auth.token.email != null
           && request.resource.data.deAuthUid == request.auth.uid
-          && request.resource.data.tipo in ['reaccion', 'comentario']
+          && request.resource.data.tipo in ['reaccion', 'comentario', 'highfive', 'mencion']
           && request.resource.data.deNombre is string
           && request.resource.data.deNombre.size() <= 80
           && request.resource.data.paraAuthUid is string
@@ -130,11 +130,21 @@ service cloud.firestore {
           && request.resource.data.nombre.size() <= 80
           && request.resource.data.texto is string
           && request.resource.data.texto.size() <= 500
-          // debe traer texto o foto (o ambos)
-          && (request.resource.data.texto.size() > 0 || request.resource.data.fotoURL is string)
+          // debe traer texto, foto o una actividad registrada (autopost)
+          && (request.resource.data.texto.size() > 0
+              || request.resource.data.fotoURL is string
+              || request.resource.data.actividad is map)
           && (!('fotoURL' in request.resource.data)
               || request.resource.data.fotoURL == null
               || (request.resource.data.fotoURL is string && request.resource.data.fotoURL.size() <= 2000))
+          // autopost de registro: tarjeta con la actividad del día, acotada
+          && (!('actividad' in request.resource.data)
+              || (request.resource.data.actividad is map
+                  && request.resource.data.actividad.tipo is string
+                  && request.resource.data.actividad.tipo.size() <= 40
+                  && request.resource.data.actividad.minutos is number
+                  && request.resource.data.actividad.calorias is number
+                  && request.resource.data.actividad.racha is number))
           && request.resource.data.reacciones is map
           && request.resource.data.reacciones.size() == 0
           && request.resource.data.numComentarios == 0;

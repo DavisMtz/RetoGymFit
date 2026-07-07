@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, Avatar, StatusStrip } from '../components/ui';
+import { useToast, vibrate, Avatar, StatusStrip, FilasSkeleton } from '../components/ui';
 import { LISTA_RETOS, getReto } from '../config/retos';
 import {
   adminObtenerUsuarios, adminActualizarUsuario, adminGuardarRegistro, adminBorrarRegistro,
@@ -318,7 +318,7 @@ export default function Admin() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Participantes</h2></div>
-        {usuarios === null && <div className="rank-empty">Cargando participantes…</div>}
+        {usuarios === null && <FilasSkeleton rows={5} />}
         {usuarios !== null && !usuarios.length && <div className="rank-empty">Sin participantes en este reto.</div>}
         {(usuarios || []).map((u) => (
           <div className={`admin-user ${abierto === u.id ? 'open' : ''}`} key={u.id}>
@@ -372,7 +372,7 @@ export default function Admin() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Publicaciones del feed</h2></div>
-        {posts === null && <div className="rank-empty">Cargando publicaciones…</div>}
+        {posts === null && <FilasSkeleton rows={3} />}
         {posts !== null && !posts.length && <div className="rank-empty">Nadie ha publicado en este reto.</div>}
         {(posts || []).map((p) => (
           <div className={`admin-user ${postAbierto === p.id ? 'open' : ''}`} key={p.id}>
@@ -427,7 +427,7 @@ export default function Admin() {
           <h2 className="card-title">Pagos del bote</h2>
           <button className="admin-btn" type="button" onClick={() => { vibrate(); setModalPago(true); }}>＋ Pago</button>
         </div>
-        {pagos === null && <div className="rank-empty">Cargando pagos…</div>}
+        {pagos === null && <FilasSkeleton rows={2} />}
         {pagos !== null && !pagos.length && <div className="rank-empty">Sin pagos capturados.</div>}
         {(pagos || []).map((p) => (
           <div className="hist-row admin-hist" key={p.id}>

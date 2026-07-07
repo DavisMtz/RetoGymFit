@@ -1,13 +1,26 @@
 /**
  * Ranking: clasificación semanal/mensual, bote acumulado y actividad reciente.
+ * Las filas se reordenan con FLIP al cambiar de pestaña o refrescar, cada
+ * avatar lleva su anillo de progreso semanal y puedes chocar los cinco 🖐️
+ * a cualquiera (le llega como notificación push).
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, Avatar, Header, StatusStrip, RankSkeleton, useCountUp } from '../components/ui';
-import { entradaPodio } from '../lib/anim';
-import { obtenerRankingSemanal, obtenerRankingMensual, obtenerBote, obtenerActividadReciente, obtenerUsuariosActivos } from '../data/queries';
+import {
+  useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip, RankSkeleton,
+  useCountUp, usePullToRefresh, PullIndicator,
+} from '../components/ui';
+import { entradaPodio, capturarFlip, animarFlip, punch, particulasEmoji } from '../lib/anim';
+import {
+  obtenerRankingSemanal, obtenerRankingMensual, obtenerBote,
+  obtenerActividadReciente, obtenerUsuariosActivos, enviarHighFive,
+} from '../data/queries';
 import { hoyMX, semanaISO } from '../lib/dates';
+
+function leerHifives(retoId) {
+  try { return new Set(JSON.parse(localStorage.getItem(`rgf_hifive_${retoId}_${hoyMX()}`)) || []); } catch { return new Set(); }
+}
 
 export default function Ranking() {
   const { reto, usuario } = useAuth();
@@ -17,9 +30,13 @@ export default function Ranking() {
   const [rankingMes, setRankingMes] = useState(null);
   const [bote, setBote] = useState(null);
   const [ticker, setTicker] = useState([]);
-  const [fotos, setFotos] = useState({}); // usuarioId → photoURL
+  const [fotos, setFotos] = useState({});     // usuarioId → photoURL
+  const [porId, setPorId] = useState({});     // usuarioId → doc de usuario (authUid)
+  const [hifives, setHifives] = useState(() => leerHifives(reto.id));
   const [girando, setGirando] = useState(false);
   const podioRef = useRef(null);
+  const listaRef = useRef(null);
+  const flipRef = useRef(null); // estado FLIP capturado antes de mutar la lista
 
   const cargar = useCallback(async () => {
     try {
@@ -33,6 +50,7 @@ export default function Ranking() {
       setBote(b);
       setTicker(act);
       setFotos(Object.fromEntries(usuarios.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));
+      setPorId(Object.fromEntries(usuarios.map((u) => [u.id, u])));
     } catch {
       toast('Error al cargar el ranking', true);
       setRanking([]);
@@ -40,6 +58,39 @@ export default function Ranking() {
   }, [reto, toast]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  async function refrescar() {
+    flipRef.current = capturarFlip(listaRef.current);
+    setRankingMes(null);
+    await cargar();
+  }
+
+  const ptr = usePullToRefresh(refrescar);
+
+  // Anima las filas hasta su nueva posición si se capturó un estado FLIP
+  useLayoutEffect(() => {
+    if (flipRef.current) {
+      animarFlip(flipRef.current);
+      flipRef.current = null;
+    }
+  });
+
+  async function chocarla(r, el) {
+    if (r.usuarioId === usuario.id || hifives.has(r.usuarioId)) return;
+    const destino = porId[r.usuarioId];
+    vibrate(20);
+    punch(el, 1.3);
+    particulasEmoji(el, '🖐️', 5);
+    try {
+      await enviarHighFive(reto.id, usuario, destino);
+      const nuevo = new Set(hifives).add(r.usuarioId);
+      setHifives(nuevo);
+      try { localStorage.setItem(`rgf_hifive_${reto.id}_${hoyMX()}`, JSON.stringify([...nuevo])); } catch { /* modo privado */ }
+      toast(`🖐️ ¡Chocaste los cinco con ${r.nombre.split(' ')[0]}!`);
+    } catch {
+      toast(destino?.authUid ? 'No se pudo enviar el high-five.' : `${r.nombre.split(' ')[0]} aún no activa su cuenta.`, true);
+    }
+  }
 
   useEffect(() => {
     if (tab === 'mes' && rankingMes === null) {
@@ -90,6 +141,7 @@ export default function Ranking() {
 
   return (
     <div className="app-shell">
+      <PullIndicator {...ptr} />
       <Header reto={reto} />
       <StatusStrip />
 
@@ -122,8 +174,8 @@ export default function Ranking() {
             type="button"
             aria-label="Refrescar"
             onClick={async () => {
-              vibrate(); setGirando(true); setRankingMes(null);
-              await cargar();
+              vibrate(); setGirando(true);
+              await refrescar();
               setTimeout(() => setGirando(false), 900);
             }}
           >
@@ -131,8 +183,8 @@ export default function Ranking() {
           </button>
         </div>
         <div className="rank-tabs" role="tablist">
-          <button className={`rank-tab ${tab === 'semana' ? 'active' : ''}`} role="tab" onClick={() => { vibrate(); setTab('semana'); }}>Esta semana</button>
-          <button className={`rank-tab ${tab === 'mes' ? 'active' : ''}`} role="tab" onClick={() => { vibrate(); setTab('mes'); }}>Este mes</button>
+          <button className={`rank-tab ${tab === 'semana' ? 'active' : ''}`} role="tab" onClick={() => { vibrate(); flipRef.current = capturarFlip(listaRef.current); setTab('semana'); }}>Esta semana</button>
+          <button className={`rank-tab ${tab === 'mes' ? 'active' : ''}`} role="tab" onClick={() => { vibrate(); flipRef.current = capturarFlip(listaRef.current); setTab('mes'); }}>Este mes</button>
         </div>
         <div className="rank-period-label">{etiqueta}</div>
 
@@ -149,7 +201,9 @@ export default function Ranking() {
                 >
                   {pos === 0 && <div className="podium-crown">👑</div>}
                   <div className="podium-av-wrap">
-                    <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="podium-av" ampliable />
+                    {tab === 'semana'
+                      ? <AvatarRing nombre={r.nombre} url={fotos[r.usuarioId]} progreso={r.dias / reto.metaDiasSemana} className="podium-av" ampliable />
+                      : <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="podium-av" ampliable />}
                   </div>
                   <div className="podium-name">{r.nombre.split(' ')[0]}</div>
                   <div className="podium-kcal">{(r.calorias || 0).toLocaleString('es-MX')} kcal{r.puntosExtra > 0 ? ' · ⭐' : ''}</div>
@@ -157,23 +211,36 @@ export default function Ranking() {
                     <span className="podium-medal">{medallas[pos]}</span>
                     <span className="podium-days">{r.dias}d</span>
                   </div>
+                  {r.usuarioId !== usuario.id && (
+                    <button
+                      className={`hifive-btn podium-hifive ${hifives.has(r.usuarioId) ? 'dado' : ''}`}
+                      type="button"
+                      aria-label={`Chocar los cinco con ${r.nombre}`}
+                      onClick={(e) => chocarla(r, e.currentTarget)}
+                    >
+                      🖐️
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
 
-        <ul className="rank-list">
+        <ul className="rank-list" ref={listaRef}>
           {lista === null && <RankSkeleton />}
           {lista !== null && !lista.length && <li className="rank-empty">Sin datos — sé quien abra el marcador.</li>}
           {resto.map((r, i) => (
             <li
               className={`rank-row ${r.usuarioId === usuario.id ? 'you' : ''}`}
-              key={r.nombre}
+              key={r.usuarioId || r.nombre}
+              data-flip-id={r.usuarioId || r.nombre}
               style={{ animationDelay: `${Math.min(0.3 + i * 0.06, 0.8)}s` }}
             >
               <div className="rank-pos">{i + 4}</div>
-              <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="rank-av" ampliable />
+              {tab === 'semana'
+                ? <AvatarRing nombre={r.nombre} url={fotos[r.usuarioId]} progreso={r.dias / reto.metaDiasSemana} className="rank-av" ampliable />
+                : <Avatar nombre={r.nombre} url={fotos[r.usuarioId]} className="rank-av" ampliable />}
               <div className="rank-info">
                 <div className="rank-name">{r.nombre}</div>
                 <div className="rank-cal">
@@ -181,6 +248,16 @@ export default function Ranking() {
                   {r.puntosExtra > 0 && <span className="rank-extra">⭐ +{r.puntosExtra} pto</span>}
                 </div>
               </div>
+              {r.usuarioId !== usuario.id && (
+                <button
+                  className={`hifive-btn ${hifives.has(r.usuarioId) ? 'dado' : ''}`}
+                  type="button"
+                  aria-label={`Chocar los cinco con ${r.nombre}`}
+                  onClick={(e) => chocarla(r, e.currentTarget)}
+                >
+                  🖐️
+                </button>
+              )}
               <div className={`rank-days ${r.dias >= reto.metaDiasSemana ? 'full' : ''}`}>{r.dias}d</div>
             </li>
           ))}

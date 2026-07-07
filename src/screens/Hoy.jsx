@@ -3,16 +3,18 @@
  * El estatus (CUMPLE / NO CUMPLE / JUSTIFICADO) se calcula con las reglas
  * del reto y se guarda en Firestore; después se replica a Google Sheets.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots } from '../components/ui';
+import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots, getInitials, useCountUp } from '../components/ui';
 import {
   obtenerRegistroHoy, guardarRegistro, contarPorTipo,
   obtenerHistorial, obtenerRankingSemanal,
+  obtenerQuienesEntrenaronHoy, obtenerUsuariosActivos, publicarPostRegistro,
 } from '../data/queries';
 import { sincronizarRegistro } from '../lib/sheets';
+import { entradaCelebracion } from '../lib/anim';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
 const FRASES = {
@@ -46,6 +48,106 @@ function lanzarConfetti(colores) {
   })();
 }
 
+/**
+ * Overlay de celebración tras registrar el día: racha, semana encendiéndose
+ * y mensaje según qué tan cerca estás de asegurar la semana.
+ */
+function Celebracion({ reto, datos, onCerrar }) {
+  const ref = useRef(null);
+  const rachaAnim = useCountUp(datos ? datos.racha : null, 1100);
+
+  useEffect(() => {
+    if (datos) return entradaCelebracion(ref.current);
+    return undefined;
+  }, [datos]);
+
+  let icono = '💪';
+  let titulo = <>Misión <em>cumplida.</em></>;
+  let msg = '';
+  let justificado = false;
+  if (datos) {
+    const { dias, estatus, tipo } = datos;
+    const meta = reto.metaDiasSemana;
+    if (estatus === 'JUSTIFICADO') {
+      justificado = true;
+      icono = tipo === 'Periodo Menstrual' ? '🌸' : tipo === 'Incapacidad' ? '🩹' : '🌴';
+      titulo = <>Día <em>justificado.</em></>;
+      msg = 'Quedó registrado y cuenta para tu semana. Descansa y vuelve más fuerte.';
+    } else if (dias >= meta) {
+      icono = '🏆';
+      titulo = <>¡Semana <em>completa!</em></>;
+      msg = `${dias} de ${meta} días — la multa ya no te alcanza. Ahora rompe récords.`;
+    } else if (dias === meta - 1) {
+      icono = '⚡';
+      titulo = <>Casi <em>tuya.</em></>;
+      msg = `Llevas ${dias} de ${meta} — a 1 día de asegurar la semana. No aflojes.`;
+    } else {
+      msg = `Día ${dias} de ${meta} esta semana. La constancia paga — tu equipo ya lo vio.`;
+    }
+  }
+
+  return (
+    <div className={`celebra-overlay ${datos ? 'show' : ''}`} role="dialog" aria-modal="true" aria-label="Registro guardado">
+      {datos && (
+        <div className="celebra" ref={ref}>
+          <div className={`celebra-icono ${justificado ? 'justificado' : ''}`}>{icono}</div>
+          <h2 className="celebra-titulo celebra-anim">{titulo}</h2>
+          <p className="celebra-msg celebra-anim">{msg}</p>
+          <div className="celebra-stats celebra-anim">
+            <div className="celebra-stat">
+              <b>{rachaAnim == null ? datos.racha : Math.round(rachaAnim)}</b>
+              <span>Racha 🔥</span>
+            </div>
+            <div className="celebra-stat">
+              <b>{datos.dias}<small style={{ fontSize: 14 }}>/{reto.metaDiasSemana}</small></b>
+              <span>Semana</span>
+            </div>
+          </div>
+          {datos.semana && <div className="celebra-anim"><WeekDots semana={datos.semana} /></div>}
+          <button className="celebra-btn celebra-anim" type="button" onClick={() => { vibrate(20); onCerrar(); }}>
+            Continuar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Barra grupal: quiénes del equipo ya entrenaron hoy. */
+function EquipoHoy({ equipo }) {
+  if (!equipo || !equipo.total) return null;
+  const n = equipo.entrenaron.length;
+  const pct = Math.min((n / equipo.total) * 100, 100);
+  const visibles = equipo.entrenaron.slice(0, 8);
+  const extra = n - visibles.length;
+  return (
+    <div className="equipo-hoy">
+      <div className="equipo-hoy-head">
+        <span className="equipo-hoy-label">El equipo hoy</span>
+        <span className="equipo-hoy-num"><b>{n}</b> de {equipo.total}</span>
+      </div>
+      <div className="equipo-avs">
+        {n === 0 && <span style={{ fontSize: 12, color: 'var(--text-low)' }}>Nadie ha entrenado aún — abre tú el marcador 🏁</span>}
+        {visibles.map((e, i) => (
+          <span
+            className="equipo-av"
+            key={e.usuarioId}
+            title={e.nombre}
+            style={{
+              animationDelay: `${i * 0.05}s`,
+              ...(equipo.fotos[e.usuarioId] ? { backgroundImage: `url(${equipo.fotos[e.usuarioId]})` } : {}),
+            }}
+          >
+            {!equipo.fotos[e.usuarioId] && getInitials(e.nombre)}
+          </span>
+        ))}
+        {extra > 0 && <span className="equipo-av mas" style={{ animationDelay: `${visibles.length * 0.05}s` }}>+{extra}</span>}
+      </div>
+      <div className="equipo-track"><div className="equipo-fill" style={{ width: `${pct}%` }} /></div>
+    </div>
+  );
+}
+
 export default function Hoy() {
   const { reto, usuario } = useAuth();
   const toast = useToast();
@@ -55,6 +157,8 @@ export default function Hoy() {
   const [racha, setRacha] = useState(0);
   const [diasSemana, setDiasSemana] = useState(0);
   const [posicion, setPosicion] = useState(null); // { pos, total, rival, faltan }
+  const [equipo, setEquipo] = useState(null);     // { entrenaron, total, fotos }
+  const [celebracion, setCelebracion] = useState(null); // { racha, dias, semana, estatus, tipo, waUrl }
 
   const [tipo, setTipo] = useState('');
   const [horas, setHoras] = useState('');
@@ -69,20 +173,34 @@ export default function Hoy() {
   const colores = ['#d4ff00', '#ffffff', '#4ade80', ...(reto.acentoSecundario ? [reto.acentoSecundario] : [])];
 
   const cargar = useCallback(async () => {
-    const [regHoy, historial, ranking] = await Promise.all([
+    const [regHoy, historial, ranking, entrenaron, activos] = await Promise.all([
       obtenerRegistroHoy(reto.id, usuario.id),
       obtenerHistorial(reto.id, usuario.id, 120),
       obtenerRankingSemanal(reto),
+      obtenerQuienesEntrenaronHoy(reto.id).catch(() => []),
+      obtenerUsuariosActivos(reto.id).catch(() => []),
     ]);
     setRegistroHoy(regHoy);
     const cumplidas = historial.filter((r) => r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO').map((r) => r.fecha);
-    setRacha(calcularRacha(cumplidas));
+    const rachaCalc = calcularRacha(cumplidas);
+    setRacha(rachaCalc);
     const dias = {};
     historial.forEach((r) => { dias[r.fecha] = r.estatus; });
     // Semana visual a partir del historial
-    setSemana(diasDeSemana(hoyMX()).map((fecha) => ({ fecha, estatus: dias[fecha] || 'sin registro' })));
+    const semanaCalc = diasDeSemana(hoyMX()).map((fecha) => ({ fecha, estatus: dias[fecha] || 'sin registro' }));
+    setSemana(semanaCalc);
     const mio = ranking.find((r) => r.usuarioId === usuario.id);
-    setDiasSemana(mio ? mio.dias : 0);
+    const diasCalc = mio ? mio.dias : 0;
+    setDiasSemana(diasCalc);
+    // Barra grupal: quiénes ya entrenaron hoy (solo participantes activos)
+    if (activos.length) {
+      const idsActivos = new Set(activos.map((u) => u.id));
+      setEquipo({
+        entrenaron: entrenaron.filter((e) => idsActivos.has(e.usuarioId)),
+        total: activos.length,
+        fotos: Object.fromEntries(activos.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])),
+      });
+    }
     // Posición competitiva de la semana: dónde vas y a quién puedes cazar
     const idx = ranking.findIndex((r) => r.usuarioId === usuario.id);
     if (idx !== -1 && ranking.length > 1) {
@@ -96,6 +214,8 @@ export default function Hoy() {
     } else {
       setPosicion(null);
     }
+    // Valores frescos para quien los necesite justo después de guardar
+    return { racha: rachaCalc, dias: diasCalc, semana: semanaCalc };
   }, [reto, usuario]);
 
   useEffect(() => { cargar().catch(() => toast('Error al cargar tus datos', true)); }, [cargar, toast]);
@@ -164,10 +284,24 @@ export default function Hoy() {
       const registro = await guardarRegistro(reto.id, usuario, datos);
       sincronizarRegistro(reto, registro); // replica a Google Sheets (no bloquea)
 
-      lanzarConfetti(colores);
-      setModalWA({ url: construirMsgWA(datos, estatus) });
+      const waUrl = construirMsgWA(datos, estatus);
+      const cumple = estatus === 'CUMPLE' || estatus === 'JUSTIFICADO';
       setTipo(''); setHoras(''); setMinutos(''); setCalorias(''); setNotas(''); setHonor(false);
-      await cargar();
+      const fresco = await cargar();
+
+      // Autopost al feed: la actividad + la nota que la acompañó.
+      // El Periodo Menstrual nunca se publica, por privacidad.
+      if (cumple && datos.tipo !== 'Periodo Menstrual') {
+        publicarPostRegistro(reto.id, usuario, registro, fresco.racha);
+      }
+
+      if (cumple) {
+        lanzarConfetti(colores);
+        vibrate([30, 40, 60]);
+        setCelebracion({ ...fresco, estatus, tipo: datos.tipo, waUrl });
+      } else {
+        setModalWA({ url: waUrl });
+      }
     } catch (err) {
       const msg = err?.code === 'permission-denied' || String(err).includes('already exists')
         ? 'Ya existe un registro tuyo el día de hoy.'
@@ -179,6 +313,7 @@ export default function Hoy() {
   }
 
   const progresoPct = Math.min((diasSemana / reto.metaDiasSemana) * 100, 100);
+  const diasAnim = useCountUp(diasSemana, 800);
 
   return (
     <div className="app-shell">
@@ -191,7 +326,7 @@ export default function Hoy() {
         <h1 className="hero-title">Más fuerte<br /><em>que ayer.</em></h1>
         <p className="hero-sub">Registra tu actividad de hoy. Tu equipo te está viendo.</p>
         <div className="hero-stat">
-          <div className="hero-stat-num">{diasSemana}<span>/{reto.metaDiasSemana}</span></div>
+          <div className="hero-stat-num">{Math.round(diasAnim ?? diasSemana)}<span>/{reto.metaDiasSemana}</span></div>
           <div className="hero-stat-label">Días<br />completados</div>
         </div>
         <div className="progress-track">
@@ -210,6 +345,8 @@ export default function Hoy() {
         )}
         {semana && <WeekDots semana={semana} />}
       </div>
+
+      <EquipoHoy equipo={equipo} />
 
       {posicion && (
         <Link to="/ranking" className="posicion-strip" onClick={() => vibrate(12)}>
@@ -336,6 +473,17 @@ export default function Hoy() {
           </form>
         </section>
       )}
+
+      {/* Celebración post-registro → al cerrar, sigue el envío de evidencia */}
+      <Celebracion
+        reto={reto}
+        datos={celebracion}
+        onCerrar={() => {
+          const waUrl = celebracion?.waUrl;
+          setCelebracion(null);
+          if (waUrl) setModalWA({ url: waUrl });
+        }}
+      />
 
       {/* Modal WhatsApp */}
       <div className={`modal-overlay ${modalWA ? 'show' : ''}`}>

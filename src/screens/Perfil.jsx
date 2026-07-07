@@ -1,15 +1,17 @@
 /**
- * Perfil: identidad del atleta, días justificados disponibles,
- * reglamento, foto de perfil, cambio de contraseña y cierre de sesión.
+ * Perfil: identidad del atleta (con anillo de progreso semanal), días
+ * justificados disponibles, reglamento, foto de perfil, tema claro/oscuro,
+ * cambio de contraseña y cierre de sesión.
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useToast, vibrate, Avatar, Header, StatusStrip } from '../components/ui';
+import { useToast, vibrate, AvatarRing, Header, StatusStrip, useCountUp } from '../components/ui';
 import ReglasSheet from '../components/Reglas';
 import { obtenerHistorial, contarPorTipo } from '../data/queries';
 import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
-import { calcularRacha } from '../lib/dates';
+import { obtenerTema, guardarTema } from '../lib/tema';
+import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
 export default function Perfil() {
   const { reto, usuario, cerrarSesion, cambiarPassword, refrescarUsuario } = useAuth();
@@ -32,6 +34,15 @@ export default function Perfil() {
   const [pushOk, setPushOk] = useState(false);
   const [pushActivo, setPushActivo] = useState(Boolean(usuario.fcmToken));
   const [pushCargando, setPushCargando] = useState(false);
+  const [diasEstaSemana, setDiasEstaSemana] = useState(0);
+  const [tema, setTema] = useState(obtenerTema);
+
+  function toggleTema() {
+    vibrate(15);
+    const nuevo = tema === 'claro' ? 'oscuro' : 'claro';
+    setTema(nuevo);
+    guardarTema(nuevo);
+  }
 
   useEffect(() => { pushDisponible().then(setPushOk); }, []);
 
@@ -68,6 +79,9 @@ export default function Perfil() {
           .map((r) => r.fecha);
         setRacha(calcularRacha(cumplidas));
         setTotalDias(new Set(cumplidas).size);
+        // Días de ESTA semana para el anillo del avatar
+        const dias = diasDeSemana(hoyMX());
+        setDiasEstaSemana(new Set(cumplidas.filter((f) => f >= dias[0] && f <= dias[6])).size);
         if (reto.limites.Vacaciones) {
           setVacaciones(await contarPorTipo(reto.id, usuario.id, 'Vacaciones', 'anual'));
         }
@@ -136,6 +150,9 @@ export default function Perfil() {
     }
   }
 
+  const rachaAnim = useCountUp(racha, 800);
+  const diasAnim = useCountUp(totalDias, 1000);
+
   return (
     <div className="app-shell">
       <Header reto={reto} />
@@ -148,7 +165,12 @@ export default function Perfil() {
           onClick={elegirFoto}
           aria-label="Cambiar foto de perfil"
         >
-          <Avatar nombre={usuario.nombre} url={foto} className="profile-av" />
+          <AvatarRing
+            nombre={usuario.nombre}
+            url={foto}
+            progreso={diasEstaSemana / reto.metaDiasSemana}
+            className="profile-av"
+          />
           <span className="profile-av-edit">{subiendo ? '…' : '📷'}</span>
         </button>
         <input
@@ -161,8 +183,8 @@ export default function Perfil() {
         <h1 className="profile-name">{usuario.nombre}</h1>
         <div className="profile-reto">{reto.nombre} · {reto.subtitulo}</div>
         <div className="profile-badges">
-          <span className="pbadge">🔥 Racha <b>{racha}</b></span>
-          <span className="pbadge">💪 Días <b>{totalDias}</b></span>
+          <span className="pbadge">🔥 Racha <b>{Math.round(rachaAnim ?? racha)}</b></span>
+          <span className="pbadge">💪 Días <b>{Math.round(diasAnim ?? totalDias)}</b></span>
           {vacaciones !== null && (
             <span className="pbadge">🌴 Vacaciones <b>{reto.limites.Vacaciones.max - vacaciones}</b> disp.</span>
           )}
@@ -199,6 +221,14 @@ export default function Perfil() {
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Cuenta</h2></div>
+        <button className="pref-row" type="button" onClick={toggleTema}>
+          <span className="pr-icon">{tema === 'claro' ? '☀️' : '🌙'}</span>
+          <span className="pr-text">
+            Tema {tema === 'claro' ? 'claro' : 'oscuro'}
+            <span className="pr-sub">Toca para cambiar a {tema === 'claro' ? 'oscuro' : 'claro'}</span>
+          </span>
+          <span className={`honor-switch ${tema === 'claro' ? 'push-on' : ''}`} style={{ pointerEvents: 'none' }} />
+        </button>
         <button className="pref-row" type="button" onClick={elegirFoto} disabled={subiendo}>
           <span className="pr-icon">📷</span>
           <span className="pr-text">
