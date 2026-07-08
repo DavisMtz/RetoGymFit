@@ -138,6 +138,53 @@ export function useCountUp(value, duracion = 1300) {
   return value == null ? null : mostrado;
 }
 
+/**
+ * Estado de conexión del dispositivo. Devuelve `online` y `reciénReconectado`
+ * (true durante ~3 s tras recuperar la señal, para confirmar visualmente).
+ */
+export function useOnline() {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [reconectado, setReconectado] = useState(false);
+  useEffect(() => {
+    let t;
+    const subir = () => {
+      setOnline(true);
+      setReconectado(true);
+      clearTimeout(t);
+      t = setTimeout(() => setReconectado(false), 3000);
+    };
+    const bajar = () => setOnline(false);
+    window.addEventListener('online', subir);
+    window.addEventListener('offline', bajar);
+    return () => { window.removeEventListener('online', subir); window.removeEventListener('offline', bajar); clearTimeout(t); };
+  }, []);
+  return { online, reconectado };
+}
+
+/**
+ * Pill flotante de conexión: avisa cuando no hay red (los registros se guardan
+ * en local y se sincronizan al volver) y confirma brevemente la reconexión.
+ * Vive sobre la tab bar, sin taparla.
+ */
+export function ConexionPill() {
+  const { online, reconectado } = useOnline();
+  if (online && !reconectado) return null;
+  return createPortal(
+    <div className={`conexion-pill ${online ? 'online' : 'offline'}`} role="status" aria-live="polite">
+      {online ? (
+        <>
+          <span className="conexion-dot" /> De vuelta en línea — sincronizando…
+        </>
+      ) : (
+        <>
+          <span className="conexion-dot" /> Sin conexión — tu registro se guardará al reconectar
+        </>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
 export function StatusStrip() {
   const hoy = hoyMX();
   const fecha = new Date().toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '').toUpperCase();

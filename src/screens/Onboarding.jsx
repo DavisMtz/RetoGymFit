@@ -10,7 +10,7 @@ import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos } from '../data/queries';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
-import { getInitials, Avatar, vibrate, PeopleSkeleton } from '../components/ui';
+import { Avatar, vibrate, PeopleSkeleton } from '../components/ui';
 
 const IconSearch = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
@@ -268,7 +268,7 @@ export default function Onboarding() {
     <div className="onboard">
       <button className="back-link" type="button" onClick={() => setPaso(2)}>← Elegir otro nombre</button>
       <div className="pass-card">
-        <div className="pass-avatar">{getInitials(elegido.nombre)}</div>
+        <Avatar nombre={elegido.nombre} url={elegido.photoURL} className="pass-avatar" />
         <h2 className="pass-name">{elegido.nombre}</h2>
         <p className="pass-hint">
           {tienePass

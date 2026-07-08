@@ -1,19 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider, TabBar, AnimeIntro, useToast } from './components/ui';
+import { ToastProvider, TabBar, AnimeIntro, useToast, ConexionPill } from './components/ui';
 import InstalarBanner from './components/InstalarBanner';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
 import Onboarding from './screens/Onboarding';
-import Admin from './screens/Admin';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
 import Stats from './screens/Stats';
 import Perfil from './screens/Perfil';
+
+// El panel de administración solo lo usa el super usuario: se carga bajo
+// demanda para no pesar en el arranque de los participantes.
+const Admin = lazy(() => import('./screens/Admin'));
 
 function Boot() {
   return (
@@ -85,7 +88,7 @@ function Shell() {
 
   if (cargando) return <Boot />;
   if (!autenticado) return reconectando ? <Reconectando onSalir={olvidarSesion} /> : <Onboarding />;
-  if (esAdmin) return <Admin />;
+  if (esAdmin) return <Suspense fallback={<Boot />}><Admin /></Suspense>;
 
   return (
     <>
@@ -114,6 +117,7 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <Shell />
+          <ConexionPill />
         </ToastProvider>
       </AuthProvider>
     </HashRouter>

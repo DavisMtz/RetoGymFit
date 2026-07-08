@@ -156,7 +156,8 @@ Los pagos se capturan en Firestore (`retos/{retoId}/pagos`) desde la consola de 
 
 ## Stack
 
-- **React 18 + Vite** · SPA con `HashRouter` (funciona en cualquier hosting estático)
-- **Firebase Auth** (anónimo + email/password sintético) · **Firestore** con caché offline persistente
+- **React 18 + Vite** · SPA con `HashRouter` (funciona en cualquier hosting estático). El bundle se divide por chunks (firebase, gsap, react, admin en carga diferida) para un arranque veloz.
+- **Firebase Auth** (anónimo + email/password sintético) · **Firestore** con caché offline persistente. Un indicador de conexión avisa cuando no hay señal y confirma la reconexión.
+- **Tipografías self-hosted** (`public/fonts`, subset latino, precacheadas por el service worker): la identidad visual se conserva aun sin conexión, sin depender de Google Fonts.
 - **canvas-confetti** para las celebraciones 🎉
 - Diseño propio (dark + lima eléctrico, tipografías Bricolage Grotesque / Geist / Instrument Serif) heredado de la app original y ampliado: intro cinemática de bienvenida, tab bar flotante con blur, reveals escalonados y tema rosa para Damas.
