@@ -1125,6 +1125,16 @@ input:disabled { opacity: 0.55; }
   box-shadow: 0 10px 28px -6px var(--acc-glow); transition: transform 0.2s var(--spring);
 }
 .celebra-btn:active { transform: scale(0.97); }
+.celebra-cta { display: flex; flex-direction: column; align-items: stretch; }
+.celebra-cta .btn-wa { margin-top: 4px; }
+.celebra-btn-sec {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-mid); font-family: var(--body); font-size: 14px; font-weight: 600;
+  padding: 14px; text-align: center; text-decoration: none;
+  transition: color 0.2s;
+}
+.celebra-btn-sec:hover { color: var(--text-hi); }
+.celebra-btn-sec:active { transform: scale(0.98); }
 
 /* ——— Partículas de emoji (reacciones) ——— */
 .particulas-capa { position: fixed; inset: 0; pointer-events: none; z-index: 470; }
