@@ -65,6 +65,10 @@ function Celebracion({ reto, datos, onCerrar }) {
   let titulo = <>Misión <em>cumplida.</em></>;
   let msg = '';
   let justificado = false;
+  // ¿La actividad registrada exige evidencia (fotos por WhatsApp)?
+  const requiereEvidencia = datos
+    ? Boolean(reto.actividades.find((a) => a.id === datos.tipo)?.requiereDatos)
+    : false;
   if (datos) {
     const { dias, estatus, tipo } = datos;
     const meta = reto.metaDiasSemana;
@@ -104,9 +108,41 @@ function Celebracion({ reto, datos, onCerrar }) {
             </div>
           </div>
           {datos.semana && <div className="celebra-anim"><WeekDots semana={datos.semana} /></div>}
-          <button className="celebra-btn celebra-anim" type="button" onClick={() => { vibrate(20); onCerrar(); }}>
-            Continuar
-          </button>
+          <div className="celebra-cta celebra-anim">
+            {requiereEvidencia ? (
+              <>
+                <a
+                  className="btn-wa"
+                  href={datos.waUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => { vibrate(20); onCerrar(); }}
+                >
+                  Enviar evidencia por WhatsApp
+                </a>
+                <button className="celebra-btn-sec" type="button" onClick={() => { vibrate(); onCerrar(); }}>
+                  Ya la envié
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="celebra-btn" type="button" onClick={() => { vibrate(20); onCerrar(); }}>
+                  Continuar
+                </button>
+                {datos.waUrl && (
+                  <a
+                    className="celebra-btn-sec"
+                    href={datos.waUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => onCerrar()}
+                  >
+                    Avisar al grupo por WhatsApp
+                  </a>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -474,18 +510,15 @@ export default function Hoy() {
         </section>
       )}
 
-      {/* Celebración post-registro → al cerrar, sigue el envío de evidencia */}
+      {/* Celebración post-registro: el CTA de WhatsApp vive dentro, un tap menos */}
       <Celebracion
         reto={reto}
         datos={celebracion}
-        onCerrar={() => {
-          const waUrl = celebracion?.waUrl;
-          setCelebracion(null);
-          if (waUrl) setModalWA({ url: waUrl });
-        }}
+        onCerrar={() => setCelebracion(null)}
       />
 
-      {/* Modal WhatsApp */}
+      {/* Modal WhatsApp (solo para registros que NO cumplen; el flujo de
+          celebración ya trae su propio botón de evidencia) */}
       <div className={`modal-overlay ${modalWA ? 'show' : ''}`}>
         <div className="modal">
           <div className="modal-icon success">

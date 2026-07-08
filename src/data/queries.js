@@ -234,6 +234,20 @@ export async function adminActualizarUsuario(retoId, usuarioId, campos) {
 }
 
 /**
+ * Restablece el acceso de un participante que olvidó su contraseña: libera
+ * el perfil (authUid null, sin contraseña) e incrementa `resetGen`. Al volver
+ * a entrar, la app le genera un email sintético nuevo (`-r{gen}`) y crea una
+ * contraseña fresca — sin tocar la consola de Firebase.
+ */
+export async function adminRestablecerAcceso(retoId, usuarioId) {
+  await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), {
+    authUid: null,
+    hasPassword: false,
+    resetGen: increment(1),
+  });
+}
+
+/**
  * Crea o sobrescribe el registro de un participante en cualquier fecha.
  * Deriva semana/mes del `fecha` para mantener el ranking consistente.
  */

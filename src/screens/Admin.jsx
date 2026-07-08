@@ -13,6 +13,7 @@ import {
   adminObtenerUsuarios, adminActualizarUsuario, adminGuardarRegistro, adminBorrarRegistro,
   adminObtenerPagos, adminAgregarPago, adminBorrarPago,
   adminObtenerPosts, adminActualizarPost, adminBorrarPost,
+  adminRestablecerAcceso,
   obtenerHistorial, obtenerRankingSemanal, obtenerComentarios, borrarComentario,
 } from '../data/queries';
 import { sincronizarRegistroAdmin, borrarRegistroSheet } from '../lib/sheets';
@@ -118,6 +119,7 @@ export default function Admin() {
   const [comentarios, setComentarios] = useState({});       // postId → comentarios
   const [modalRegistro, setModalRegistro] = useState(null); // { usuario, registro|null }
   const [modalBorrar, setModalBorrar] = useState(null);     // { usuario, registro }
+  const [modalReset, setModalReset] = useState(null);       // usuario
   const [modalEditarPost, setModalEditarPost] = useState(null); // post
   const [modalBorrarPost, setModalBorrarPost] = useState(null); // post
   const [textoPost, setTextoPost] = useState('');
@@ -162,6 +164,18 @@ export default function Admin() {
     const nuevo = abierto === u.id ? null : u.id;
     setAbierto(nuevo);
     if (nuevo && !historial[u.id]) cargarHistorial(u.id);
+  }
+
+  async function restablecerAcceso() {
+    const u = modalReset;
+    setModalReset(null);
+    try {
+      await adminRestablecerAcceso(retoId, u.id);
+      setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, hasPassword: false, authUid: null } : x)));
+      toast(`Acceso de ${u.nombre.split(' ')[0]} restablecido ✓`);
+    } catch {
+      toast('No se pudo restablecer el acceso.', true);
+    }
   }
 
   async function cambiarEstado(u) {
@@ -342,6 +356,11 @@ export default function Admin() {
                   <button className="admin-btn" type="button" onClick={() => { vibrate(); cambiarEstado(u); }}>
                     {u.estado === 'Activo' ? '⏸ Dar de baja' : '▶ Reactivar'}
                   </button>
+                  {u.hasPassword && (
+                    <button className="admin-btn" type="button" onClick={() => { vibrate(); setModalReset(u); }}>
+                      🔑 Restablecer acceso
+                    </button>
+                  )}
                 </div>
                 {!historial[u.id] && <div className="rank-empty" style={{ padding: '16px' }}>Cargando historial…</div>}
                 {historial[u.id] && !historial[u.id].length && (
@@ -464,6 +483,19 @@ export default function Admin() {
               />
             </>
           )}
+        </div>
+      </div>
+
+      {/* Modal restablecer acceso */}
+      <div className={`modal-overlay ${modalReset ? 'show' : ''}`}>
+        <div className="modal">
+          <h2>¿Restablecer acceso?</h2>
+          <p>
+            {modalReset && `${modalReset.nombre} podrá crear una nueva contraseña la próxima vez que entre. `}
+            Su historial y registros no se tocan; solo se libera el inicio de sesión.
+          </p>
+          <button className="btn-dark" type="button" onClick={restablecerAcceso}>Sí, restablecer</button>
+          <button className="btn-secondary" type="button" onClick={() => setModalReset(null)}>Cancelar</button>
         </div>
       </div>
 

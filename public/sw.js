@@ -50,8 +50,13 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 /* ——— Caché del app shell ——— */
-const CACHE = 'rgf-shell-v2.3.0';
-const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'rgf-shell-v2.7.0';
+const PRECACHE = [
+  '/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png',
+  // Tipografías self-hosted: la identidad visual sobrevive sin conexión
+  '/fonts/bricolage-grotesque.woff2', '/fonts/geist.woff2', '/fonts/geist-mono.woff2',
+  '/fonts/instrument-serif-400.woff2', '/fonts/instrument-serif-400-italic.woff2',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

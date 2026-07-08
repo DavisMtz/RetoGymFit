@@ -1,19 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider, TabBar, AnimeIntro, useToast } from './components/ui';
+import { ToastProvider, TabBar, AnimeIntro, useToast, ConexionPill } from './components/ui';
 import InstalarBanner from './components/InstalarBanner';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
 import Onboarding from './screens/Onboarding';
-import Admin from './screens/Admin';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
 import Stats from './screens/Stats';
 import Perfil from './screens/Perfil';
+
+// El panel de administración solo lo usa el super usuario: se carga bajo
+// demanda para no pesar en el arranque de los participantes.
+const Admin = lazy(() => import('./screens/Admin'));
 
 function Boot() {
   return (
@@ -23,8 +26,32 @@ function Boot() {
   );
 }
 
+/**
+ * Pantalla de reconexión: se muestra cuando hay una sesión guardada pero
+ * Firebase aún no responde (señal lenta del gym). Evita el parpadeo de
+ * onboarding. Tras unos segundos ofrece una salida manual por si se atora.
+ */
+function Reconectando({ onSalir }) {
+  const [mostrarSalida, setMostrarSalida] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMostrarSalida(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="boot">
+      <div className="boot-mark">R</div>
+      <p className="boot-msg">Reconectando…</p>
+      {mostrarSalida && (
+        <button className="boot-salir" type="button" onClick={onSalir}>
+          ¿Tarda mucho? Ir al inicio
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Shell() {
-  const { cargando, autenticado, esAdmin, reto, usuario } = useAuth();
+  const { cargando, autenticado, esAdmin, reconectando, reto, usuario, olvidarSesion } = useAuth();
   const location = useLocation();
   const toast = useToast();
   const [intro, setIntro] = useState(false);
@@ -60,8 +87,8 @@ function Shell() {
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;
-  if (!autenticado) return <Onboarding />;
-  if (esAdmin) return <Admin />;
+  if (!autenticado) return reconectando ? <Reconectando onSalir={olvidarSesion} /> : <Onboarding />;
+  if (esAdmin) return <Suspense fallback={<Boot />}><Admin /></Suspense>;
 
   return (
     <>
@@ -90,6 +117,7 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <Shell />
+          <ConexionPill />
         </ToastProvider>
       </AuthProvider>
     </HashRouter>

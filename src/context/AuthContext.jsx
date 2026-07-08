@@ -25,9 +25,14 @@ const SESSION_KEY = 'rgf_session_v1';
 const ADMIN_EMAIL = 'admin@retogymfit.app';
 const AuthContext = createContext(null);
 
-function emailSintetico(retoId, usuarioId) {
+function emailSintetico(retoId, usuarioId, resetGen = 0) {
   const slug = usuarioId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return `u-${slug}@${retoId}.retogymfit.app`;
+  // resetGen>0 genera un email nuevo tras un reinicio de acceso del admin:
+  // así la cuenta vieja queda huérfana y el participante crea una nueva
+  // contraseña sin necesidad de tocar la consola de Firebase. Los usuarios
+  // ya registrados (gen 0) conservan su email original.
+  const sufijo = resetGen > 0 ? `-r${resetGen}` : '';
+  return `u-${slug}${sufijo}@${retoId}.retogymfit.app`;
 }
 
 function leerSesion() {
@@ -89,7 +94,7 @@ export function AuthProvider({ children }) {
 
   /** Primera vez: crear contraseña y reclamar el perfil */
   const crearCuenta = useCallback(async (retoId, usuarioDoc, password) => {
-    const email = emailSintetico(retoId, usuarioDoc.id);
+    const email = emailSintetico(retoId, usuarioDoc.id, usuarioDoc.resetGen || 0);
     const cred = EmailAuthProvider.credential(email, password);
     let user;
     if (auth.currentUser?.isAnonymous) {
@@ -108,7 +113,7 @@ export function AuthProvider({ children }) {
 
   /** Acceso normal con contraseña existente */
   const iniciarSesion = useCallback(async (retoId, usuarioDoc, password) => {
-    const email = emailSintetico(retoId, usuarioDoc.id);
+    const email = emailSintetico(retoId, usuarioDoc.id, usuarioDoc.resetGen || 0);
     const { user } = await signInWithEmailAndPassword(auth, email, password);
     await marcarAcceso(retoId, usuarioDoc.id, user.uid);
     const s = { retoId, usuarioId: usuarioDoc.id };
@@ -133,6 +138,17 @@ export function AuthProvider({ children }) {
     await signOut(auth); // onAuthStateChanged vuelve a entrar como anónimo
   }, []);
 
+  /**
+   * Descarta la sesión guardada sin cerrar sesión en Firebase (útil como
+   * escape si la reconexión se atora: funciona aun sin red). Lleva al
+   * onboarding para volver a entrar a mano.
+   */
+  const olvidarSesion = useCallback(() => {
+    localStorage.removeItem(SESSION_KEY);
+    setSesion(null);
+    setUsuario(null);
+  }, []);
+
   const cambiarPassword = useCallback(async (nueva) => {
     if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Sin sesión');
     await updatePassword(auth.currentUser, nueva);
@@ -144,16 +160,22 @@ export function AuthProvider({ children }) {
   }, []);
 
   const esAdmin = Boolean(sesion?.admin && usuario);
+  const autenticado = Boolean(usuario && reto) || esAdmin;
   const value = {
     cargando,
-    autenticado: Boolean(usuario && reto) || esAdmin,
+    autenticado,
     esAdmin,
+    // Hay una sesión guardada que aún no resuelve a un perfil válido:
+    // Firebase está reconectando. Evita mostrar el onboarding (que se
+    // sentiría como "me cerró la sesión") mientras tanto.
+    reconectando: Boolean(sesion) && !autenticado,
     reto,
     usuario,
     crearCuenta,
     iniciarSesion,
     iniciarSesionAdmin,
     cerrarSesion,
+    olvidarSesion,
     cambiarPassword,
     refrescarUsuario,
   };
