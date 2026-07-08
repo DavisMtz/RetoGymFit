@@ -23,8 +23,32 @@ function Boot() {
   );
 }
 
+/**
+ * Pantalla de reconexión: se muestra cuando hay una sesión guardada pero
+ * Firebase aún no responde (señal lenta del gym). Evita el parpadeo de
+ * onboarding. Tras unos segundos ofrece una salida manual por si se atora.
+ */
+function Reconectando({ onSalir }) {
+  const [mostrarSalida, setMostrarSalida] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMostrarSalida(true), 6000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="boot">
+      <div className="boot-mark">R</div>
+      <p className="boot-msg">Reconectando…</p>
+      {mostrarSalida && (
+        <button className="boot-salir" type="button" onClick={onSalir}>
+          ¿Tarda mucho? Ir al inicio
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Shell() {
-  const { cargando, autenticado, esAdmin, reto, usuario } = useAuth();
+  const { cargando, autenticado, esAdmin, reconectando, reto, usuario, olvidarSesion } = useAuth();
   const location = useLocation();
   const toast = useToast();
   const [intro, setIntro] = useState(false);
@@ -60,7 +84,7 @@ function Shell() {
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;
-  if (!autenticado) return <Onboarding />;
+  if (!autenticado) return reconectando ? <Reconectando onSalir={olvidarSesion} /> : <Onboarding />;
   if (esAdmin) return <Admin />;
 
   return (

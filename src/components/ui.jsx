@@ -299,6 +299,23 @@ export function FilasSkeleton({ rows = 4 }) {
   );
 }
 
+/** Placeholder de la lista de participantes del onboarding (mismo layout). */
+export function PeopleSkeleton({ rows = 6 }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        <div className="person-skeleton" key={i} aria-hidden="true">
+          <div className="sk sk-av" />
+          <div className="person-skeleton-lines">
+            <div className="sk sk-text" style={{ height: 14, maxWidth: 160 }} />
+            <div className="sk sk-text" style={{ height: 9, maxWidth: 90, marginTop: 6 }} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 // ——————————————————————————————— Pull to refresh
 
 /**

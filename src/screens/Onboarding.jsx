@@ -10,7 +10,7 @@ import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos } from '../data/queries';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
-import { getInitials, Avatar, vibrate, useToast } from '../components/ui';
+import { getInitials, Avatar, vibrate, PeopleSkeleton } from '../components/ui';
 
 const IconSearch = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
@@ -32,7 +32,6 @@ function mensajeError(e) {
 
 export default function Onboarding() {
   const { crearCuenta, iniciarSesion, iniciarSesionAdmin } = useAuth();
-  const toast = useToast();
 
   const [paso, setPaso] = useState(1);
   const [modalAdmin, setModalAdmin] = useState(false);
@@ -41,30 +40,46 @@ export default function Onboarding() {
   const [entrandoAdmin, setEntrandoAdmin] = useState(false);
   const [reto, setReto] = useState(null);
   const [usuarios, setUsuarios] = useState(null);
+  const [errorCarga, setErrorCarga] = useState(false);
+  const [recargar, setRecargar] = useState(0);
   const [busqueda, setBusqueda] = useState('');
   const [elegido, setElegido] = useState(null);
   const [pass, setPass] = useState('');
   const [pass2, setPass2] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [modalOlvido, setModalOlvido] = useState(false);
 
   useEffect(() => {
     document.body.dataset.reto = reto?.id || '';
   }, [reto]);
 
-  // Cargar participantes al elegir reto. La fuente principal es la pestaña
-  // "Usuarios" del Google Sheet (la administras ahí); Firestore aporta quién
-  // ya tiene contraseña. Si la hoja no responde, usamos solo Firestore.
+  // Cargar participantes al elegir reto. Firestore responde en milisegundos
+  // (caché local) → se muestra AL INSTANTE; la pestaña "Usuarios" del Google
+  // Sheet es la fuente viva del roster y refina la lista al llegar (arranque
+  // en frío del Apps Script: 2–5 s). Si ambas fallan, se marca error real.
   useEffect(() => {
-    if (!reto) return;
+    if (!reto) return undefined;
     setUsuarios(null);
-    (async () => {
-      const [deSheet, deFirestore] = await Promise.all([
-        obtenerUsuariosSheet(reto.id).catch(() => null),
-        obtenerUsuariosActivos(reto.id).catch(() => []),
-      ]);
+    setErrorCarga(false);
+    let activo = true;
+
+    // 1) Firestore primero: vista instantánea
+    const pFirestore = obtenerUsuariosActivos(reto.id)
+      .then((fs) => {
+        // Preview inmediato (solo si aún no llegó la hoja autoritativa)
+        if (activo && fs.length) setUsuarios((prev) => prev ?? fs);
+        return fs;
+      })
+      .catch(() => []);
+
+    // 2) Google Sheet: fuente viva del roster; reconcilia al llegar
+    const pSheet = obtenerUsuariosSheet(reto.id).then((s) => s).catch(() => null);
+
+    Promise.all([pSheet, pFirestore]).then(([deSheet, deFirestore]) => {
+      if (!activo) return;
       if (deSheet === null && !deFirestore.length) {
-        toast('No pude cargar la lista. Revisa tu conexión.', true);
+        setErrorCarga(true);
         setUsuarios([]);
         return;
       }
@@ -83,12 +98,15 @@ export default function Onboarding() {
               hasPassword: docFS?.hasPassword || false,
               authUid: docFS?.authUid || null,
               photoURL: docFS?.photoURL || null,
+              resetGen: docFS?.resetGen || 0,
             };
           })
           .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
       );
-    })();
-  }, [reto, toast]);
+    });
+
+    return () => { activo = false; };
+  }, [reto, recargar]);
 
   const filtrados = useMemo(() => {
     if (!usuarios) return [];
@@ -207,8 +225,23 @@ export default function Onboarding() {
           />
         </div>
         <div className="people-list">
-          {usuarios === null && <div className="rank-empty">Cargando participantes…</div>}
-          {usuarios !== null && !filtrados.length && <div className="rank-empty">No hay resultados. ¿Estás en la lista de activos?</div>}
+          {usuarios === null && <PeopleSkeleton rows={6} />}
+          {errorCarga && (
+            <div className="carga-error">
+              <div className="carga-error-icon">📡</div>
+              <b>No pudimos cargar la lista</b>
+              <p>Revisa tu conexión e inténtalo de nuevo. Tus datos están a salvo.</p>
+              <button className="btn-dark" type="button" onClick={() => { vibrate(); setRecargar((n) => n + 1); }}>
+                Reintentar
+              </button>
+            </div>
+          )}
+          {usuarios !== null && !errorCarga && !usuarios.length && (
+            <div className="rank-empty">Aún no hay participantes activos en este reto.</div>
+          )}
+          {usuarios !== null && !errorCarga && usuarios.length > 0 && !filtrados.length && (
+            <div className="rank-empty">Ningún nombre coincide con «{busqueda.trim()}».</div>
+          )}
           {filtrados.map((u, i) => (
             <button
               key={u.id}
@@ -268,10 +301,24 @@ export default function Onboarding() {
           </button>
         </form>
         {tienePass && (
-          <button className="btn-secondary" type="button" onClick={() => toast('Pide al admin restablecer tu acceso desde la consola de Firebase.', false)}>
+          <button className="btn-secondary" type="button" onClick={() => { vibrate(); setModalOlvido(true); }}>
             ¿Olvidaste tu contraseña?
           </button>
         )}
+      </div>
+
+      {/* Modal olvidé mi contraseña */}
+      <div className={`modal-overlay ${modalOlvido ? 'show' : ''}`}>
+        <div className="modal">
+          <div className="modal-icon">🔑</div>
+          <h2>Recuperar tu acceso</h2>
+          <p>
+            Pídele al administrador del reto que <b>restablezca tu acceso</b>.
+            En cuanto lo haga, vuelve aquí y podrás crear una contraseña nueva
+            al entrar. Tu historial y tu racha quedan intactos.
+          </p>
+          <button className="btn-dark" type="button" onClick={() => setModalOlvido(false)}>Entendido</button>
+        </div>
       </div>
     </div>
   );
