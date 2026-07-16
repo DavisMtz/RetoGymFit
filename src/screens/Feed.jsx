@@ -1,12 +1,12 @@
 /**
- * Feed social del reto: publica pensamientos o fotos fitness, reacciona con
- * emojis (con partículas 🎉) y comenta con @menciones. Los registros de
- * actividad aparecen como tarjetas automáticas. Se actualiza en vivo
+ * Feed social del reto: publica pensamientos o fotos fitness y reacciona con
+ * emojis (con partículas 🎉). Tocar una publicación la abre en su propia
+ * pantalla (#/post/{reto}/{id}) con los comentarios a la vista; los registros
+ * de actividad aparecen como tarjetas automáticas. Se actualiza en vivo
  * (onSnapshot) para que se sienta como una red social del equipo.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip,
@@ -14,242 +14,18 @@ import {
 } from '../components/ui';
 import {
   suscribirPosts, publicarPost, borrarPost, reaccionarPost,
-  obtenerComentarios, comentarPost, borrarComentario, obtenerUsuariosActivos,
-  obtenerRankingSemanal, notificarMenciones,
+  obtenerUsuariosActivos, obtenerRankingSemanal,
 } from '../data/queries';
+import { hace } from '../components/Comentarios';
 import { subirFotoFeed } from '../lib/feedFoto';
-import { abrirLightbox, punch, particulasEmoji } from '../lib/anim';
+import { punch, particulasEmoji } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
 
-function hace(ts) {
-  if (!ts?.toDate) return 'ahora';
-  const mins = Math.max(0, Math.round((Date.now() - ts.toDate().getTime()) / 60000));
-  if (mins < 1) return 'ahora';
-  if (mins < 60) return `hace ${mins} min`;
-  if (mins < 1440) return `hace ${Math.round(mins / 60)} h`;
-  return `hace ${Math.round(mins / 1440)} d`;
-}
-
-// ——— Menciones @nombre ———————————————————————————————
-// Pliegue que PRESERVA la longitud del texto (minúsculas + sin acentos) para
-// poder buscar nombres sin que los índices se desalineen al resaltar.
-function fold(s) {
-  return String(s).toLowerCase()
-    .replace(/[áàäâ]/g, 'a').replace(/[éèëê]/g, 'e').replace(/[íìïî]/g, 'i')
-    .replace(/[óòöô]/g, 'o').replace(/[úùüû]/g, 'u').replace(/ñ/g, 'n');
-}
-
-/** Usuarios mencionados en el texto: por nombre completo o primer nombre (si es único). */
-function detectarMencionados(texto, usuarios) {
-  const t = fold(texto);
-  if (!t.includes('@')) return [];
-  const cuentaPrimero = {};
-  usuarios.forEach((u) => {
-    const p = fold(u.nombre.split(' ')[0]);
-    cuentaPrimero[p] = (cuentaPrimero[p] || 0) + 1;
-  });
-  return usuarios.filter((u) => {
-    if (t.includes('@' + fold(u.nombre))) return true;
-    const primero = fold(u.nombre.split(' ')[0]);
-    return cuentaPrimero[primero] === 1 && t.includes('@' + primero);
-  });
-}
-
-/** Renderiza el texto de un comentario resaltando las @menciones. */
-function TextoConMenciones({ texto, usuarios }) {
-  const partes = useMemo(() => {
-    const t = fold(texto);
-    const zonas = [];
-    (usuarios || []).forEach((u) => {
-      [u.nombre, u.nombre.split(' ')[0]].forEach((candidato) => {
-        const token = '@' + fold(candidato);
-        let idx = t.indexOf(token);
-        while (idx !== -1) {
-          zonas.push([idx, idx + token.length]);
-          idx = t.indexOf(token, idx + 1);
-        }
-      });
-    });
-    if (!zonas.length) return [{ texto, mencion: false }];
-    // Fusiona zonas solapadas (nombre completo vs primer nombre) y corta
-    zonas.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
-    const unidas = [];
-    zonas.forEach(([a, b]) => {
-      const ultima = unidas[unidas.length - 1];
-      if (ultima && a <= ultima[1]) ultima[1] = Math.max(ultima[1], b);
-      else unidas.push([a, b]);
-    });
-    const out = [];
-    let cursor = 0;
-    unidas.forEach(([a, b]) => {
-      if (a > cursor) out.push({ texto: texto.slice(cursor, a), mencion: false });
-      out.push({ texto: texto.slice(a, b), mencion: true });
-      cursor = b;
-    });
-    if (cursor < texto.length) out.push({ texto: texto.slice(cursor), mencion: false });
-    return out;
-  }, [texto, usuarios]);
-
-  return (
-    <p>
-      {partes.map((p, i) => (p.mencion ? <span className="mention" key={i}>{p.texto}</span> : p.texto))}
-    </p>
-  );
-}
-
-function Comentarios({ reto, post, usuario, fotos, usuarios }) {
+function Post({ reto, post, fotos, dias, onBorrar, onAbrir }) {
   const toast = useToast();
-  const [comentarios, setComentarios] = useState(null);
-  const [texto, setTexto] = useState('');
-  const [enviando, setEnviando] = useState(false);
-  const [mencion, setMencion] = useState(null); // { query, start } — palabra @ bajo el cursor
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    obtenerComentarios(reto.id, post.id).then(setComentarios).catch(() => setComentarios([]));
-  }, [reto.id, post.id]);
-
-  function onCambio(e) {
-    const v = e.target.value;
-    setTexto(v);
-    const caret = e.target.selectionStart ?? v.length;
-    // ¿La palabra que se está escribiendo empieza con @? → abre el autocomplete
-    const m = v.slice(0, caret).match(/@([a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]*(?: [a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ]*)?)$/);
-    setMencion(m ? { query: m[1], start: caret - m[0].length } : null);
-  }
-
-  const sugerencias = useMemo(() => {
-    if (!mencion) return [];
-    const q = fold(mencion.query.trim());
-    return (usuarios || [])
-      .filter((u) => u.id !== usuario.id && (!q || fold(u.nombre).includes(q)))
-      .slice(0, 5);
-  }, [mencion, usuarios, usuario.id]);
-
-  function elegirMencion(u) {
-    vibrate(12);
-    const finQuery = mencion.start + mencion.query.length + 1; // +1 por la @
-    const nuevo = (texto.slice(0, mencion.start) + '@' + u.nombre + ' ' + texto.slice(finQuery)).slice(0, 300);
-    setTexto(nuevo);
-    setMencion(null);
-    inputRef.current?.focus();
-  }
-
-  async function enviar(e) {
-    e.preventDefault();
-    const t = texto.trim();
-    if (!t) return;
-    setEnviando(true);
-    setMencion(null);
-    vibrate(20);
-    try {
-      await comentarPost(reto.id, post, usuario, t);
-      // Aviso push a quienes fueron @mencionados (no bloquea)
-      notificarMenciones(reto.id, post, usuario, t, detectarMencionados(t, usuarios || []));
-      setTexto('');
-      setComentarios(await obtenerComentarios(reto.id, post.id));
-    } catch {
-      toast('No se pudo comentar.', true);
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  async function borrar(c) {
-    try {
-      await borrarComentario(reto.id, post.id, c.id);
-      setComentarios((prev) => prev.filter((x) => x.id !== c.id));
-    } catch {
-      toast('No se pudo borrar el comentario.', true);
-    }
-  }
-
-  return (
-    <div className="post-comments">
-      {comentarios === null && <div className="post-comments-loading">Cargando comentarios…</div>}
-      {(comentarios || []).map((c) => (
-        <div className="comment" key={c.id}>
-          <Avatar nombre={c.nombre} url={fotos[c.usuarioId]} className="comment-av" ampliable />
-          <div className="comment-bubble">
-            <b>{c.nombre.split(' ').slice(0, 2).join(' ')}</b>
-            <TextoConMenciones texto={c.texto} usuarios={usuarios} />
-            <span className="comment-meta">{hace(c.creadoEn)}</span>
-          </div>
-          {c.authUid === auth.currentUser?.uid && (
-            <button className="comment-del" type="button" aria-label="Borrar comentario" onClick={() => { vibrate(); borrar(c); }}>✕</button>
-          )}
-        </div>
-      ))}
-      <form className="comment-form" onSubmit={enviar}>
-        {mencion && sugerencias.length > 0 && (
-          <div className="mencion-pop" role="listbox" aria-label="Mencionar a alguien">
-            {sugerencias.map((u) => (
-              <button className="mencion-item" type="button" key={u.id} role="option" aria-selected="false" onClick={() => elegirMencion(u)}>
-                <Avatar nombre={u.nombre} url={u.photoURL} className="rank-av" />
-                {u.nombre}
-              </button>
-            ))}
-          </div>
-        )}
-        <Avatar nombre={usuario.nombre} url={usuario.photoURL} className="comment-av" />
-        <input
-          ref={inputRef}
-          type="text"
-          maxLength="300"
-          placeholder="Escribe un comentario… (@ para mencionar)"
-          value={texto}
-          onChange={onCambio}
-          onBlur={() => setTimeout(() => setMencion(null), 200)}
-        />
-        <button className="comment-send" type="submit" disabled={enviando || !texto.trim()} aria-label="Enviar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-        </button>
-      </form>
-    </div>
-  );
-}
-
-/** Visor de foto a pantalla completa */
-function Lightbox({ foto, onClose }) {
-  const imgRef = useRef(null);
-  const captionRef = useRef(null);
-
-  // Bloquea el scroll del fondo, cierra con Escape y anima la entrada (GSAP)
-  useEffect(() => {
-    if (!foto) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    abrirLightbox(imgRef.current, captionRef.current);
-    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
-  }, [foto, onClose]);
-
-  // Portal al body: por encima de todo (la tabbar vive en otro stacking context)
-  return createPortal(
-    <div className={`lightbox ${foto ? 'show' : ''}`} onClick={onClose} role="dialog" aria-modal="true" aria-label="Foto a pantalla completa">
-      {foto && (
-        <>
-          <img ref={imgRef} className="lightbox-img" src={foto.url} alt="" onClick={(e) => e.stopPropagation()} />
-          <div ref={captionRef} className="lightbox-caption" onClick={(e) => e.stopPropagation()}>
-            <b>{foto.nombre}</b>
-            {foto.texto && <p>{foto.texto}</p>}
-          </div>
-          <button className="lightbox-close" type="button" aria-label="Cerrar" onClick={onClose}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-          </button>
-        </>
-      )}
-    </div>,
-    document.body,
-  );
-}
-
-function Post({ reto, post, usuario, fotos, usuarios, dias, onBorrar, onVerFoto }) {
-  const toast = useToast();
-  const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
+  const { usuario } = useAuth();
   const miUid = auth.currentUser?.uid;
   const miReaccion = post.reacciones?.[miUid] || null;
 
@@ -286,8 +62,15 @@ function Post({ reto, post, usuario, fotos, usuarios, dias, onBorrar, onVerFoto 
     ].filter(Boolean).join(' · ')
     : '';
 
+  // Toda la tarjeta abre la publicación en su pantalla, salvo los controles
+  // con acción propia (reacciones, borrar, avatar ampliable…)
+  function alTocar(e) {
+    if (e.target.closest('button, a, input, form')) return;
+    onAbrir(post);
+  }
+
   return (
-    <article className="post">
+    <article className="post post-tocable" onClick={alTocar}>
       <header className="post-head">
         <AvatarRing
           nombre={post.nombre}
@@ -321,8 +104,8 @@ function Post({ reto, post, usuario, fotos, usuarios, dias, onBorrar, onVerFoto 
         <button
           type="button"
           className="post-photo-wrap"
-          aria-label="Ver foto a pantalla completa"
-          onClick={() => { vibrate(12); onVerFoto({ url: post.fotoURL, nombre: post.nombre, texto: post.texto }); }}
+          aria-label="Abrir la publicación"
+          onClick={() => { vibrate(12); onAbrir(post); }}
         >
           <img className="post-photo" src={post.fotoURL} alt="" loading="lazy" />
         </button>
@@ -342,17 +125,14 @@ function Post({ reto, post, usuario, fotos, usuarios, dias, onBorrar, onVerFoto 
           ))}
         </div>
         <button
-          className={`comments-toggle ${comentariosAbiertos ? 'open' : ''}`}
+          className="comments-toggle"
           type="button"
-          onClick={() => { vibrate(12); setComentariosAbiertos(!comentariosAbiertos); }}
+          aria-label="Ver comentarios"
+          onClick={() => { vibrate(12); onAbrir(post); }}
         >
           💬 {totalComentarios > 0 ? totalComentarios : ''}
         </button>
       </div>
-
-      {comentariosAbiertos && (
-        <Comentarios reto={reto} post={post} usuario={usuario} fotos={fotos} usuarios={usuarios} />
-      )}
     </article>
   );
 }
@@ -361,19 +141,16 @@ export default function Feed() {
   const { reto, usuario } = useAuth();
   const toast = useToast();
   const fileRef = useRef();
-  const location = useLocation();
   const navigate = useNavigate();
 
   const [posts, setPosts] = useState(null);
   const [fotos, setFotos] = useState({});     // usuarioId → photoURL
-  const [usuarios, setUsuarios] = useState([]); // activos (menciones + authUid)
   const [dias, setDias] = useState({});       // usuarioId → días de esta semana (anillo)
   const [texto, setTexto] = useState('');
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [publicando, setPublicando] = useState(false);
   const [modalBorrar, setModalBorrar] = useState(null); // post
-  const [fotoAbierta, setFotoAbierta] = useState(null); // { url, nombre, texto }
 
   // Feed en vivo
   useEffect(() => {
@@ -385,36 +162,24 @@ export default function Feed() {
     return unsub;
   }, [reto.id, toast]);
 
-  // Avatares, lista para menciones y progreso semanal (anillos)
+  // Avatares y progreso semanal (anillos)
   const cargarGente = useCallback(async () => {
     const [us, ranking] = await Promise.all([
       obtenerUsuariosActivos(reto.id),
       obtenerRankingSemanal(reto).catch(() => []),
     ]);
-    setUsuarios(us);
     setFotos(Object.fromEntries(us.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));
     setDias(Object.fromEntries(ranking.map((r) => [r.usuarioId, r.dias])));
   }, [reto]);
 
   useEffect(() => { cargarGente().catch(() => {}); }, [cargarGente]);
 
-  // Llegada desde una notificación: desplaza hasta la publicación y resáltala.
-  // El state se limpia para no repetir el efecto al volver a esta pantalla.
-  useEffect(() => {
-    const postId = location.state?.postId;
-    if (!postId || posts === null) return;
-    navigate(location.pathname, { replace: true, state: null });
-    // pequeño margen para que la transición de página no pelee con el scroll
-    setTimeout(() => {
-      const el = document.getElementById(`post-${postId}`);
-      if (!el) { toast('Esa publicación ya no está en el feed reciente'); return; }
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('post-destacado');
-      setTimeout(() => el.classList.remove('post-destacado'), 2600);
-    }, 350);
-  }, [location.state, location.pathname, posts, navigate, toast]);
-
   const ptr = usePullToRefresh(() => cargarGente().catch(() => {}));
+
+  // Cada publicación vive en su propia URL: se abre, se comparte, se enlaza
+  const abrirPost = useCallback((p) => {
+    navigate(`/post/${reto.id}/${p.id}`);
+  }, [navigate, reto.id]);
 
   function elegirFoto(e) {
     const file = e.target.files?.[0];
@@ -510,21 +275,17 @@ export default function Feed() {
         <div className="rank-empty">Nadie ha publicado aún. ¡Rompe el hielo con tu primera foto! 📸</div>
       )}
       {(posts || []).map((p, i) => (
-        <div key={p.id} id={`post-${p.id}`} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
+        <div key={p.id} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
           <Post
             reto={reto}
             post={p}
-            usuario={usuario}
             fotos={fotos}
-            usuarios={usuarios}
             dias={dias}
             onBorrar={setModalBorrar}
-            onVerFoto={setFotoAbierta}
+            onAbrir={abrirPost}
           />
         </div>
       ))}
-
-      <Lightbox foto={fotoAbierta} onClose={() => setFotoAbierta(null)} />
 
       {/* Modal borrar post */}
       <div className={`modal-overlay ${modalBorrar ? 'show' : ''}`}>

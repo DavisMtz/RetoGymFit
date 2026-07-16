@@ -340,6 +340,19 @@ export function suscribirPosts(retoId, cb, onError, max = 30) {
   );
 }
 
+/**
+ * Una publicación en vivo (reacciones/comentarios al momento). La leen
+ * también los visitantes anónimos (link compartido); las reglas solo piden
+ * estar autenticado, y la app entra como anónimo al abrir.
+ */
+export function suscribirPost(retoId, postId, cb, onError) {
+  return onSnapshot(
+    doc(db, 'retos', retoId, 'posts', postId),
+    (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    (err) => onError?.(err),
+  );
+}
+
 export async function publicarPost(retoId, usuario, { texto, fotoURL }) {
   const post = {
     usuarioId: usuario.id,

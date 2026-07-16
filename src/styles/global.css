@@ -1289,13 +1289,84 @@ input:disabled { opacity: 0.55; }
 }
 .noti-vacio-icon { display: block; font-size: 34px; margin-bottom: 10px; }
 
-/* Post resaltado al llegar desde una notificación */
-.post-destacado { animation: post-flash 2.6s var(--soft) both; border-radius: var(--r-md); }
-@keyframes post-flash {
-  0% { box-shadow: 0 0 0 2px var(--acc), 0 0 26px var(--acc-glow); }
-  70% { box-shadow: 0 0 0 2px var(--acc), 0 0 18px var(--acc-glow); }
-  100% { box-shadow: 0 0 0 2px transparent, 0 0 0 transparent; }
+/* ——— Pantalla de publicación (#/post/{reto}/{id}) ——— */
+.post-tocable { cursor: pointer; }
+.pd-shell { padding-top: 14px; }
+.pd-top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.pd-volver, .pd-compartir {
+  width: 38px; height: 38px; flex-shrink: 0; cursor: pointer;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px;
+  display: grid; place-items: center; color: var(--text-mid);
+  transition: all 0.25s var(--spring-soft);
 }
+.pd-volver:hover, .pd-compartir:hover { color: var(--acc); border-color: var(--acc); }
+.pd-volver:active, .pd-compartir:active { transform: scale(0.9); }
+.pd-marca { flex: 1; min-width: 0; }
+.pd-marca b { display: block; font-family: var(--display); font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+.pd-marca span { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--text-low); }
+
+.pd { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-md); padding: 18px 18px 8px; }
+.pd-autor { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.pd-autor-av {
+  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  background: var(--surface-3); display: grid; place-items: center;
+  font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--text-mid);
+  background-size: cover; background-position: center;
+}
+.pd-autor-info b { display: block; font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+.pd-autor-info span { font-size: 11.5px; color: var(--text-low); }
+
+/* Protagonista: foto */
+.pd-hero-foto {
+  display: block; width: calc(100% + 36px); margin: 0 -18px 16px; padding: 0;
+  border: none; background: var(--surface-2); cursor: zoom-in;
+}
+.pd-hero-foto img { display: block; width: 100%; max-height: 62vh; object-fit: cover; }
+
+/* Protagonista: actividad registrada */
+.pd-hero-actividad {
+  text-align: center; padding: 26px 16px; margin-bottom: 16px;
+  background: var(--acc-soft); border: 1px solid var(--acc-glow); border-radius: 18px;
+}
+.pd-hero-actividad.compacta { padding: 16px; }
+.pd-ha-icon { display: block; font-size: 46px; margin-bottom: 8px; }
+.pd-hero-actividad.compacta .pd-ha-icon { font-size: 30px; margin-bottom: 4px; }
+.pd-ha-tipo { font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 12px; }
+.pd-hero-actividad.compacta .pd-ha-tipo { font-size: 16px; margin-bottom: 8px; }
+.pd-ha-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pd-ha-chip {
+  padding: 6px 12px; border-radius: 999px; background: var(--surface-1);
+  border: 1px solid var(--border); font-size: 12px; color: var(--text-mid);
+}
+.pd-ha-chip b { font-family: var(--display); font-weight: 800; color: var(--text-hi); }
+.pd-ha-chip.racha { border-color: var(--acc-glow); }
+
+/* Texto: normal bajo foto/actividad, protagonista si va solo */
+.pd-texto { font-size: 14.5px; line-height: 1.6; margin: 0 0 16px; white-space: pre-wrap; }
+.pd-texto.hero {
+  font-family: var(--display); font-size: clamp(21px, 6vw, 28px); font-weight: 700;
+  line-height: 1.4; letter-spacing: -0.02em; padding: 10px 0 6px;
+}
+
+.pd-reacciones { padding: 4px 0 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.reaction-chip.grande { font-size: 17px; padding: 8px 12px; }
+.pd-reacciones.solo-lectura .reaction-chip { cursor: default; }
+
+.pd-cta-anon {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px;
+  padding: 14px 16px; margin: 0 0 14px;
+}
+.pd-cta-icon { font-size: 22px; }
+.pd-cta-anon > div { flex: 1; min-width: 160px; }
+.pd-cta-anon b { font-family: var(--display); font-size: 14px; }
+.pd-cta-anon p { font-size: 12px; color: var(--text-mid); margin: 2px 0 0; line-height: 1.45; }
+.pd-cta-anon .btn-dark { width: auto; padding: 10px 18px; margin: 0; }
+
+.pd-novale { text-align: center; padding: 60px 24px; }
+.pd-novale h2 { font-family: var(--display); font-size: 22px; font-weight: 800; margin: 6px 0; }
+.pd-novale p { font-size: 13px; color: var(--text-mid); margin-bottom: 18px; }
+.pd-novale .btn-dark { width: auto; padding: 12px 24px; }
 
 /* ——— High-five ——— */
 .hifive-btn {

@@ -9,6 +9,7 @@ import { entradaPagina } from './lib/anim';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
+import PostDetalle from './screens/PostDetalle';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
 import Stats from './screens/Stats';
@@ -87,6 +88,17 @@ function Shell() {
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;
+  // Publicación compartida por link: se puede VER sin sesión de participante
+  // (la app entra como anónimo a Firebase, suficiente para leer). La vista
+  // es de solo lectura; para reaccionar o comentar hay que entrar al reto.
+  if (!autenticado && location.pathname.startsWith('/post/')) {
+    return (
+      <Routes location={location}>
+        <Route path="/post/:retoId/:postId" element={<PostDetalle />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
   if (!autenticado) return reconectando ? <Reconectando onSalir={olvidarSesion} /> : <Onboarding />;
   if (esAdmin) return <Suspense fallback={<Boot />}><Admin /></Suspense>;
 
@@ -98,6 +110,7 @@ function Shell() {
         <Routes location={location}>
           <Route path="/" element={<Hoy />} />
           <Route path="/feed" element={<Feed />} />
+          <Route path="/post/:retoId/:postId" element={<PostDetalle />} />
           <Route path="/historial" element={<Historial />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/stats" element={<Stats />} />

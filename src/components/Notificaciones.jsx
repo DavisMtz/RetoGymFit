@@ -167,7 +167,8 @@ export default function NotiCampana() {
   function ir(item) {
     vibrate(12);
     setAbierto(false);
-    if (item.destino.postId) navigate(item.destino.ruta, { state: { postId: item.destino.postId } });
+    // Las publicaciones viven en su propia pantalla; el high-five, en el ranking
+    if (item.destino.postId) navigate(`/post/${reto.id}/${item.destino.postId}`);
     else navigate(item.destino.ruta);
   }
 

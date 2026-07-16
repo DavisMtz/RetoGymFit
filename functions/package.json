@@ -1,0 +1,11 @@
+{
+  "name": "retogymfit-functions",
+  "description": "Funciones de RetoGymFit: vista previa (Open Graph) de publicaciones compartidas",
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "private": true
+}
