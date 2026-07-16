@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast, vibrate, Avatar } from './ui';
 import {
-  obtenerComentarios, comentarPost, borrarComentario, notificarMenciones,
+  suscribirComentarios, comentarPost, borrarComentario, notificarMenciones,
 } from '../data/queries';
 import { auth } from '../firebase';
 
@@ -85,7 +85,13 @@ function TextoConMenciones({ texto, usuarios }) {
   );
 }
 
-export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
+/**
+ * `puedeComentar`: con false la lista es de solo lectura (visitantes sin
+ * sesión o participantes de otro reto) — se ven los comentarios pero no el
+ * formulario. Los comentarios llegan EN VIVO (onSnapshot): los nuevos
+ * aparecen solos, como en cualquier red social.
+ */
+export default function Comentarios({ reto, post, usuario, fotos, usuarios, puedeComentar = true }) {
   const toast = useToast();
   const [comentarios, setComentarios] = useState(null);
   const [texto, setTexto] = useState('');
@@ -93,9 +99,10 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
   const [mencion, setMencion] = useState(null); // { query, start } — palabra @ bajo el cursor
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    obtenerComentarios(reto.id, post.id).then(setComentarios).catch(() => setComentarios([]));
-  }, [reto.id, post.id]);
+  useEffect(
+    () => suscribirComentarios(reto.id, post.id, setComentarios, () => setComentarios([])),
+    [reto.id, post.id],
+  );
 
   function onCambio(e) {
     const v = e.target.value;
@@ -110,9 +117,9 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
     if (!mencion) return [];
     const q = fold(mencion.query.trim());
     return (usuarios || [])
-      .filter((u) => u.id !== usuario.id && (!q || fold(u.nombre).includes(q)))
+      .filter((u) => u.id !== usuario?.id && (!q || fold(u.nombre).includes(q)))
       .slice(0, 5);
-  }, [mencion, usuarios, usuario.id]);
+  }, [mencion, usuarios, usuario?.id]);
 
   function elegirMencion(u) {
     vibrate(12);
@@ -135,7 +142,7 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
       // Aviso a quienes fueron @mencionados (no bloquea)
       notificarMenciones(reto.id, post, usuario, t, detectarMencionados(t, usuarios || []));
       setTexto('');
-      setComentarios(await obtenerComentarios(reto.id, post.id));
+      // la suscripción en vivo trae el comentario nuevo sola
     } catch {
       toast('No se pudo comentar.', true);
     } finally {
@@ -156,7 +163,7 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
     <div className="post-comments">
       {comentarios === null && <div className="post-comments-loading">Cargando comentarios…</div>}
       {comentarios !== null && !comentarios.length && (
-        <div className="post-comments-loading">Sé el primero en comentar 💬</div>
+        <div className="post-comments-loading">{puedeComentar ? 'Sé el primero en comentar 💬' : 'Aún no hay comentarios.'}</div>
       )}
       {(comentarios || []).map((c) => (
         <div className="comment" key={c.id}>
@@ -171,6 +178,7 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
           )}
         </div>
       ))}
+      {puedeComentar && (
       <form className="comment-form" onSubmit={enviar}>
         {mencion && sugerencias.length > 0 && (
           <div className="mencion-pop" role="listbox" aria-label="Mencionar a alguien">
@@ -196,6 +204,7 @@ export default function Comentarios({ reto, post, usuario, fotos, usuarios }) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
         </button>
       </form>
+      )}
     </div>
   );
 }

@@ -551,6 +551,20 @@ export async function obtenerComentarios(retoId, postId) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+/** Comentarios en vivo (los nuevos aparecen solos). Devuelve unsubscribe. */
+export function suscribirComentarios(retoId, postId, cb, onError) {
+  const q = query(
+    collection(db, 'retos', retoId, 'posts', postId, 'comentarios'),
+    orderBy('creadoEn', 'asc'),
+    limit(100),
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(err),
+  );
+}
+
 /** Comenta y sube el contador del post en una sola operación atómica. */
 export async function comentarPost(retoId, post, usuario, texto) {
   const batch = writeBatch(db);

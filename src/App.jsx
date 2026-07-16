@@ -59,8 +59,12 @@ function Shell() {
   const previo = useRef(autenticado);
   const paginaRef = useRef(null);
 
-  // Transición de página con GSAP: cascada de los bloques de la pantalla
+  // Transición de página con GSAP: cascada de los bloques de la pantalla.
+  // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una
+  // pantalla corta (p. ej. una publicación) hereda el scroll de la anterior
+  // y el contenido queda fuera de vista.
   useEffect(() => {
+    window.scrollTo(0, 0);
     if (!autenticado || esAdmin) return undefined;
     return entradaPagina(paginaRef.current?.firstElementChild);
   }, [location.pathname, autenticado, esAdmin]);

@@ -1291,79 +1291,148 @@ input:disabled { opacity: 0.55; }
 
 /* ——— Pantalla de publicación (#/post/{reto}/{id}) ——— */
 .post-tocable { cursor: pointer; }
-.pd-shell { padding-top: 14px; }
-.pd-top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.pd-shell { padding-top: 0; }
+
+/* Barra superior flotante con desenfoque: siempre a la mano al hacer scroll */
+.pd-top {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 -18px 14px; padding: max(14px, env(safe-area-inset-top)) 18px 12px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
 .pd-volver, .pd-compartir {
   width: 38px; height: 38px; flex-shrink: 0; cursor: pointer;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px;
   display: grid; place-items: center; color: var(--text-mid);
   transition: all 0.25s var(--spring-soft);
 }
-.pd-volver:hover, .pd-compartir:hover { color: var(--acc); border-color: var(--acc); }
-.pd-volver:active, .pd-compartir:active { transform: scale(0.9); }
+.pd-volver:hover, .pd-compartir:hover { color: var(--acc); border-color: var(--acc); box-shadow: 0 0 14px -6px var(--acc-glow); }
+.pd-volver:active, .pd-compartir:active { transform: scale(0.88); }
 .pd-marca { flex: 1; min-width: 0; }
 .pd-marca b { display: block; font-family: var(--display); font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
 .pd-marca span { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--text-low); }
 
-.pd { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-md); padding: 18px 18px 8px; }
+/* La tarjeta entra sola (sin depender de la cascada de página): así el
+   contenido que llega de Firestore DESPUÉS de la transición también aparece */
+.pd {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 18px 18px 10px; overflow: hidden;
+}
+.pd-entrada { animation: rise 0.55s var(--soft) both; }
+.pd-cargando { display: flex; align-items: center; gap: 12px; }
+
 .pd-autor { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .pd-autor-av {
   width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
-  background: var(--surface-3); display: grid; place-items: center;
+  background: var(--surface-3); border: 2px solid var(--border-strong);
+  display: grid; place-items: center;
   font-family: var(--display); font-size: 14px; font-weight: 700; color: var(--text-mid);
   background-size: cover; background-position: center;
 }
-.pd-autor-info b { display: block; font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+.pd-autor-info { flex: 1; min-width: 0; }
+.pd-autor-info b { display: block; font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pd-autor-info span { font-size: 11.5px; color: var(--text-low); }
-
-/* Protagonista: foto */
-.pd-hero-foto {
-  display: block; width: calc(100% + 36px); margin: 0 -18px 16px; padding: 0;
-  border: none; background: var(--surface-2); cursor: zoom-in;
+.pd-marca-mini {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+  background: var(--acc); color: var(--on-acc); display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: 11px;
 }
-.pd-hero-foto img { display: block; width: 100%; max-height: 62vh; object-fit: cover; }
+body[data-reto='damas'] .pd-marca-mini { background: linear-gradient(135deg, var(--acc), var(--period)); }
+
+/* Protagonista: foto a sangre con degradado y zoom sutil de entrada */
+.pd-hero-foto {
+  position: relative; display: block; width: calc(100% + 36px);
+  margin: 0 -18px 16px; padding: 0; border: none;
+  background: var(--surface-2); cursor: zoom-in; overflow: hidden;
+}
+.pd-hero-foto img {
+  display: block; width: 100%; max-height: 64vh; object-fit: cover;
+  animation: pd-foto-in 0.9s var(--soft) both;
+}
+@keyframes pd-foto-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
+.pd-hero-velo {
+  position: absolute; inset: auto 0 0 0; height: 34%; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--surface-1) 55%, transparent), transparent);
+}
 
 /* Protagonista: actividad registrada */
 .pd-hero-actividad {
-  text-align: center; padding: 26px 16px; margin-bottom: 16px;
-  background: var(--acc-soft); border: 1px solid var(--acc-glow); border-radius: 18px;
+  text-align: center; padding: 30px 16px; margin-bottom: 16px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, var(--acc-soft), transparent 70%),
+    var(--surface-2);
+  border: 1px solid var(--acc-glow); border-radius: 18px;
 }
 .pd-hero-actividad.compacta { padding: 16px; }
-.pd-ha-icon { display: block; font-size: 46px; margin-bottom: 8px; }
+.pd-ha-icon { display: block; font-size: 52px; margin-bottom: 8px; animation: pop 0.5s var(--spring) 0.15s both; }
 .pd-hero-actividad.compacta .pd-ha-icon { font-size: 30px; margin-bottom: 4px; }
-.pd-ha-tipo { font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 12px; }
+.pd-ha-tipo { font-family: var(--display); font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 14px; }
 .pd-hero-actividad.compacta .pd-ha-tipo { font-size: 16px; margin-bottom: 8px; }
 .pd-ha-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .pd-ha-chip {
-  padding: 6px 12px; border-radius: 999px; background: var(--surface-1);
+  padding: 7px 13px; border-radius: 999px; background: var(--surface-1);
   border: 1px solid var(--border); font-size: 12px; color: var(--text-mid);
 }
 .pd-ha-chip b { font-family: var(--display); font-weight: 800; color: var(--text-hi); }
 .pd-ha-chip.racha { border-color: var(--acc-glow); }
 
 /* Texto: normal bajo foto/actividad, protagonista si va solo */
-.pd-texto { font-size: 14.5px; line-height: 1.6; margin: 0 0 16px; white-space: pre-wrap; }
+.pd-texto { font-size: 14.5px; line-height: 1.6; margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: break-word; }
 .pd-texto.hero {
-  font-family: var(--display); font-size: clamp(21px, 6vw, 28px); font-weight: 700;
-  line-height: 1.4; letter-spacing: -0.02em; padding: 10px 0 6px;
+  font-family: var(--display); font-size: clamp(22px, 6.5vw, 30px); font-weight: 700;
+  line-height: 1.38; letter-spacing: -0.02em; padding: 14px 0 10px;
+}
+.pd-fecha {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-low); margin-bottom: 14px;
 }
 
-.pd-reacciones { padding: 4px 0 14px; border-top: 1px solid var(--border); padding-top: 14px; }
-.reaction-chip.grande { font-size: 17px; padding: 8px 12px; }
-.pd-reacciones.solo-lectura .reaction-chip { cursor: default; }
+/* Pulso social: quiénes reaccionaron + conteos */
+.pd-pulso {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.pd-pulso-nombres { font-size: 12.5px; color: var(--text-mid); }
+.pd-pulso-stats { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--text-low); }
 
+.pd-reacciones { border-top: 1px solid var(--border); padding: 12px 0; }
+.reaction-chip.grande { font-size: 17px; padding: 9px 13px; }
+.pd-reacciones.solo-lectura .reaction-chip { cursor: default; }
+.pd-sin-reacciones { font-size: 12px; color: var(--text-low); font-family: var(--serif); font-style: italic; }
+
+/* Invitación para visitantes (link compartido, sin sesión) */
 .pd-cta-anon {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px;
-  padding: 14px 16px; margin: 0 0 14px;
+  background:
+    radial-gradient(130% 100% at 0% 0%, var(--acc-soft), transparent 60%),
+    var(--surface-2);
+  border: 1px solid var(--acc-glow); border-radius: 16px;
+  padding: 14px 16px; margin: 4px 0 14px;
 }
-.pd-cta-icon { font-size: 22px; }
-.pd-cta-anon > div { flex: 1; min-width: 160px; }
+.pd-cta-marca {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px;
+  background: var(--acc); color: var(--on-acc); display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: 13px;
+}
+.pd-cta-anon > div { flex: 1; min-width: 150px; }
 .pd-cta-anon b { font-family: var(--display); font-size: 14px; }
 .pd-cta-anon p { font-size: 12px; color: var(--text-mid); margin: 2px 0 0; line-height: 1.45; }
 .pd-cta-anon .btn-dark { width: auto; padding: 10px 18px; margin: 0; }
 
-.pd-novale { text-align: center; padding: 60px 24px; }
+.pd-comentarios-head {
+  display: flex; align-items: center; gap: 8px;
+  border-top: 1px solid var(--border); padding-top: 14px;
+}
+.pd-comentarios-head b { font-family: var(--display); font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+.pd-comentarios-head span {
+  font-family: var(--mono); font-size: 10px; color: var(--acc);
+  background: var(--acc-soft); border-radius: 999px; padding: 2px 8px;
+}
+.pd-comentarios-head + .post-comments { border-top: none; margin-top: 4px; padding-top: 4px; }
+
+.pd-novale { text-align: center; padding: 60px 24px; animation: rise 0.5s var(--soft) both; }
 .pd-novale h2 { font-family: var(--display); font-size: 22px; font-weight: 800; margin: 6px 0; }
 .pd-novale p { font-size: 13px; color: var(--text-mid); margin-bottom: 18px; }
 .pd-novale .btn-dark { width: auto; padding: 12px 24px; }

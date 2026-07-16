@@ -1,23 +1,23 @@
 /**
  * Pantalla de una publicación — cada post tiene su propia URL compartible:
- *   #/post/{retoId}/{postId}
+ *   #/post/{retoId}/{postId}   (y /p/{retoId}/{postId} para las redes)
  *
  * El contenido protagonista depende del tipo de publicación:
- *   foto → la imagen en grande · registro → tarjeta de actividad en héroe ·
- *   solo texto → tipografía display en grande.
+ *   foto → imagen a sangre con degradado · registro → tarjeta héroe de la
+ *   actividad · solo texto → tipografía display en grande.
  *
- * Con sesión de participante (del mismo reto) es interactiva: reacciones y
- * comentarios abiertos de entrada. Sin sesión (link compartido) es una vista
- * de solo lectura: la publicación con su fecha, el conteo de reacciones y
- * una invitación a entrar al reto — la app entra como anónimo a Firebase,
- * suficiente para leer.
+ * Con sesión de participante (del mismo reto) es interactiva: reacciones con
+ * partículas y comentarios EN VIVO con formulario. Sin sesión (link
+ * compartido) es de solo lectura: publicación con fecha, quiénes reaccionaron
+ * y los comentarios visibles, con invitación a entrar al reto — la app entra
+ * como anónimo a Firebase, suficiente para leer.
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Avatar } from '../components/ui';
-import Comentarios from '../components/Comentarios';
+import Comentarios, { hace } from '../components/Comentarios';
 import Lightbox from '../components/Lightbox';
 import { suscribirPost, reaccionarPost, obtenerUsuariosActivos } from '../data/queries';
 import { getReto } from '../config/retos';
@@ -75,6 +75,11 @@ export default function PostDetalle() {
     () => Object.fromEntries(usuarios.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])),
     [usuarios],
   );
+  // authUid → primer nombre, para contar quiénes reaccionaron
+  const nombrePorUid = useMemo(
+    () => Object.fromEntries(usuarios.filter((u) => u.authUid).map((u) => [u.authUid, u.nombre.split(' ')[0]])),
+    [usuarios],
+  );
 
   const miUid = auth.currentUser?.uid;
   const miReaccion = (esParticipante && post?.reacciones?.[miUid]) || null;
@@ -83,6 +88,25 @@ export default function PostDetalle() {
     Object.values(post?.reacciones || {}).forEach((e) => { c[e] = (c[e] || 0) + 1; });
     return c;
   }, [post?.reacciones]);
+  const totalReacciones = Object.keys(post?.reacciones || {}).length;
+
+  // "Les late a Ana, Beto y 3 más" — quiénes reaccionaron, con nombre
+  const quienesReaccionan = useMemo(() => {
+    const uids = Object.keys(post?.reacciones || {});
+    if (!uids.length) return '';
+    const nombres = [];
+    uids.forEach((uid) => {
+      if (uid === miUid && esParticipante) nombres.unshift('ti');
+      else if (nombrePorUid[uid]) nombres.push(nombrePorUid[uid]);
+    });
+    const resto = uids.length - nombres.length;
+    const visibles = nombres.slice(0, 2);
+    const extra = resto + (nombres.length - visibles.length);
+    if (!visibles.length) return `${uids.length} del equipo reaccionaron`;
+    let frase = `Le late a ${visibles.join(' y a ')}`;
+    if (extra > 0) frase += ` y ${extra} más`;
+    return frase;
+  }, [post?.reacciones, nombrePorUid, miUid, esParticipante]);
 
   async function reaccionar(emoji, el) {
     if (!esParticipante) return;
@@ -136,11 +160,11 @@ export default function PostDetalle() {
   const iconoActividad = esRegistro
     ? (retoURL.actividades.find((a) => a.id === post.actividad.tipo)?.icono || '💪')
     : null;
-  const totalReacciones = Object.keys(post?.reacciones || {}).length;
+  const numComentarios = post?.numComentarios || 0;
 
   return (
     <div className="app-shell pd-shell">
-      {/* Barra superior: volver / marca + compartir */}
+      {/* Barra superior flotante: volver / marca + compartir */}
       <header className="pd-top">
         <button className="pd-volver" type="button" aria-label={esParticipante ? 'Volver' : 'Ir al inicio'} onClick={volver}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
@@ -157,7 +181,16 @@ export default function PostDetalle() {
       </header>
 
       {post === undefined && (
-        <section className="card"><div className="rank-empty">Cargando publicación…</div></section>
+        <div className="pd pd-entrada">
+          <div className="pd-cargando">
+            <div className="sk sk-av" style={{ width: 46, height: 46 }} />
+            <div style={{ flex: 1 }}>
+              <div className="sk sk-text" style={{ maxWidth: 150 }} />
+              <div className="sk sk-text" style={{ maxWidth: 100, height: 9, marginTop: 7 }} />
+            </div>
+          </div>
+          <div className="sk sk-foto" style={{ marginTop: 16 }} />
+        </div>
       )}
 
       {post === null && (
@@ -170,14 +203,15 @@ export default function PostDetalle() {
       )}
 
       {post && (
-        <article className="pd stagger">
+        <article className="pd pd-entrada">
           {/* Autor + fecha completa */}
           <div className="pd-autor">
             <Avatar nombre={post.nombre} url={fotos[post.usuarioId]} className="pd-autor-av" ampliable />
             <div className="pd-autor-info">
               <b>{post.nombre}</b>
-              <span>{fechaCompleta(post.creadoEn) || 'Justo ahora'}</span>
+              <span>{esRegistro ? 'registró su actividad' : 'compartió con el equipo'} · {hace(post.creadoEn)}</span>
             </div>
+            <span className="pd-marca-mini">{retoURL.marca}</span>
           </div>
 
           {/* ——— Protagonista según el tipo ——— */}
@@ -189,6 +223,7 @@ export default function PostDetalle() {
               onClick={() => { vibrate(12); setFotoAbierta({ url: post.fotoURL, nombre: post.nombre, texto: post.texto }); }}
             >
               <img src={post.fotoURL} alt="" />
+              <span className="pd-hero-velo" aria-hidden="true" />
             </button>
           )}
 
@@ -209,10 +244,25 @@ export default function PostDetalle() {
             <p className={`pd-texto ${!post.fotoURL && !esRegistro ? 'hero' : ''}`}>{post.texto}</p>
           )}
 
+          <div className="pd-fecha">{fechaCompleta(post.creadoEn) || 'Justo ahora'}</div>
+
+          {/* ——— Pulso social: quiénes reaccionaron + conteos ——— */}
+          {(totalReacciones > 0 || numComentarios > 0) && (
+            <div className="pd-pulso">
+              {quienesReaccionan && <span className="pd-pulso-nombres">{quienesReaccionan}</span>}
+              <span className="pd-pulso-stats">
+                {totalReacciones > 0 && <>{totalReacciones} reacci{totalReacciones === 1 ? 'ón' : 'ones'}</>}
+                {totalReacciones > 0 && numComentarios > 0 && ' · '}
+                {numComentarios > 0 && <>{numComentarios} comentario{numComentarios === 1 ? '' : 's'}</>}
+              </span>
+            </div>
+          )}
+
           {/* ——— Reacciones ——— */}
-          {esParticipante ? (
-            <div className="post-reactions pd-reacciones">
-              {EMOJIS.map((e) => (
+          <div className={`post-reactions pd-reacciones ${esParticipante ? '' : 'solo-lectura'}`}>
+            {EMOJIS.map((e) => {
+              if (!esParticipante && !conteos[e]) return null;
+              return esParticipante ? (
                 <button
                   key={e}
                   type="button"
@@ -221,34 +271,40 @@ export default function PostDetalle() {
                 >
                   {e}{conteos[e] ? <b>{conteos[e]}</b> : null}
                 </button>
-              ))}
-            </div>
-          ) : (
-            totalReacciones > 0 && (
-              <div className="post-reactions pd-reacciones solo-lectura" aria-label={`${totalReacciones} reacciones`}>
-                {EMOJIS.filter((e) => conteos[e]).map((e) => (
-                  <span key={e} className="reaction-chip grande has">{e}<b>{conteos[e]}</b></span>
-                ))}
-              </div>
-            )
-          )}
+              ) : (
+                <span key={e} className="reaction-chip grande has">{e}<b>{conteos[e]}</b></span>
+              );
+            })}
+            {!esParticipante && totalReacciones === 0 && (
+              <span className="pd-sin-reacciones">Nadie ha reaccionado aún</span>
+            )}
+          </div>
 
-          {/* ——— Comentarios (participante) o invitación (visitante) ——— */}
-          {esParticipante ? (
-            <Comentarios reto={retoURL} post={post} usuario={usuario} fotos={fotos} usuarios={usuarios} />
-          ) : (
+          {/* ——— Invitación para visitantes ——— */}
+          {!esParticipante && (
             <div className="pd-cta-anon">
-              <span className="pd-cta-icon">🔒</span>
+              <span className="pd-cta-marca">{retoURL.marca}</span>
               <div>
                 <b>¿Eres parte del reto?</b>
-                <p>
-                  Entra con tu perfil para reaccionar y comentar
-                  {post.numComentarios > 0 ? ` — hay ${post.numComentarios} comentario${post.numComentarios !== 1 ? 's' : ''} esperándote` : ''}.
-                </p>
+                <p>Entra con tu perfil para reaccionar y comentar con el equipo.</p>
               </div>
               <button className="btn-dark" type="button" onClick={() => { vibrate(15); navigate('/'); }}>Entrar</button>
             </div>
           )}
+
+          {/* ——— Comentarios: visibles para todos, en vivo; opinar es de participantes ——— */}
+          <div className="pd-comentarios-head">
+            <b>Comentarios</b>
+            {numComentarios > 0 && <span>{numComentarios}</span>}
+          </div>
+          <Comentarios
+            reto={retoURL}
+            post={post}
+            usuario={usuario}
+            fotos={fotos}
+            usuarios={usuarios}
+            puedeComentar={esParticipante}
+          />
         </article>
       )}
 
