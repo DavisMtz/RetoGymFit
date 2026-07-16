@@ -1159,7 +1159,11 @@ input:disabled { opacity: 0.55; }
 .equipo-hoy-label { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-low); }
 .equipo-hoy-num { font-family: var(--display); font-size: 14px; font-weight: 700; }
 .equipo-hoy-num b { color: var(--acc); }
-.equipo-avs { display: flex; align-items: center; margin-bottom: 10px; min-height: 30px; }
+.equipo-avs {
+  display: flex; align-items: center; margin-bottom: 10px; min-height: 30px;
+  max-height: 40px; overflow: hidden;
+  transition: max-height 0.45s var(--soft), min-height 0.45s var(--soft), opacity 0.25s var(--soft), margin-bottom 0.45s var(--soft);
+}
 .equipo-av {
   width: 30px; height: 30px; border-radius: 50%; margin-left: -9px;
   background: var(--surface-3); border: 2px solid var(--surface-1);
@@ -1172,6 +1176,54 @@ input:disabled { opacity: 0.55; }
 .equipo-av.mas { font-size: 9px; background: var(--acc-soft); color: var(--acc); }
 .equipo-track { height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
 .equipo-fill { height: 100%; border-radius: 999px; background: var(--acc); transition: width 1s var(--soft); box-shadow: 0 0 10px var(--acc-glow); }
+
+/* Expansión con morfismo: la tarjeta crece, cambia de piel y la tira de
+   avatares se funde en la lista detallada (nombre + hora del registro) */
+.equipo-hoy.tocable {
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background 0.45s var(--soft), border-color 0.45s var(--soft),
+    border-radius 0.45s var(--soft), box-shadow 0.45s var(--soft), transform 0.2s var(--soft);
+}
+.equipo-hoy.tocable:active { transform: scale(0.985); }
+.equipo-hoy.expandido {
+  background: var(--surface-2); border-color: var(--acc-glow); border-radius: 26px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28), 0 0 0 1px var(--acc-soft);
+}
+.equipo-chevron { margin-left: 7px; vertical-align: -2px; color: var(--text-low); transition: transform 0.45s var(--spring), color 0.3s; }
+.equipo-hoy.expandido .equipo-chevron { transform: rotate(180deg); color: var(--acc); }
+.equipo-hoy.expandido .equipo-avs { max-height: 0; min-height: 0; opacity: 0; margin-bottom: 0; pointer-events: none; }
+.equipo-detalle { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.5s var(--soft), margin-bottom 0.5s var(--soft); margin-bottom: 0; }
+.equipo-hoy.expandido .equipo-detalle { grid-template-rows: 1fr; margin-bottom: 12px; }
+.equipo-detalle-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+.equipo-det-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 2px;
+  border-bottom: 1px solid var(--border);
+  opacity: 0; transform: translateY(10px) scale(0.97);
+}
+.equipo-det-row:last-child { border-bottom: none; }
+.equipo-hoy.expandido .equipo-det-row {
+  animation: equipo-det-in 0.5s var(--spring) both;
+  animation-delay: calc(0.12s + var(--i) * 0.06s);
+}
+@keyframes equipo-det-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.equipo-det-av {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: var(--surface-3); border: 2px solid var(--surface-1);
+  display: grid; place-items: center; font-family: var(--display);
+  font-size: 12px; font-weight: 700; color: var(--text-mid);
+  background-size: cover; background-position: center;
+}
+.equipo-det-nombre {
+  flex: 1; min-width: 0; font-family: var(--display); font-size: 14px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.equipo-det-hora {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--acc);
+}
 
 /* ——— High-five ——— */
 .hifive-btn {

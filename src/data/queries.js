@@ -187,8 +187,10 @@ export async function obtenerQuienesEntrenaronHoy(retoId) {
     if (r.tipo === 'Periodo Menstrual') return;
     if (vistos.has(r.usuarioId)) return;
     vistos.add(r.usuarioId);
-    lista.push({ usuarioId: r.usuarioId, nombre: r.nombre });
+    lista.push({ usuarioId: r.usuarioId, nombre: r.nombre, creadoEn: r.creadoEn?.toDate?.() || null });
   });
+  // Orden cronológico: quien abrió el marcador va primero
+  lista.sort((a, b) => (a.creadoEn?.getTime() || 0) - (b.creadoEn?.getTime() || 0));
   return lista;
 }
 
