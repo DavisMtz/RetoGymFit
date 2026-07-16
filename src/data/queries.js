@@ -31,27 +31,9 @@ export async function obtenerUsuario(retoId, usuarioId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * Reclama el perfil: asocia la cuenta de Auth al participante (primera vez).
- * Si el participante viene de la hoja de Google y aún no tiene documento
- * en Firestore, lo crea aquí mismo.
- */
-export async function reclamarUsuario(retoId, usuarioDoc, authUid) {
-  const ref = doc(db, 'retos', retoId, 'usuarios', usuarioDoc.id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    await updateDoc(ref, { authUid, hasPassword: true, ultimoAcceso: serverTimestamp() });
-  } else {
-    await setDoc(ref, {
-      nombre: usuarioDoc.nombre,
-      estado: 'Activo',
-      authUid,
-      hasPassword: true,
-      creadoEn: serverTimestamp(),
-      ultimoAcceso: serverTimestamp(),
-    });
-  }
-}
+// El reclamo del perfil (primera contraseña) vive en la Cloud Function
+// `reclamarPerfil`: exige el código del equipo y valida que la cuenta
+// corresponda al perfil. El cliente ya no escribe ese cambio directamente.
 
 export async function marcarAcceso(retoId, usuarioId, authUid) {
   try {

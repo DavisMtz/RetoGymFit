@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentSingleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 // Config del proyecto retogymfit. La config web de Firebase no es secreta:
 // la seguridad real vive en las reglas de Firestore (firestore.rules).
@@ -25,3 +26,6 @@ export const db = initializeFirestore(app, {
 });
 
 export const storage = getStorage(app);
+
+// Cloud Functions (us-central1): reclamo de perfiles con código del equipo
+export const functions = getFunctions(app);

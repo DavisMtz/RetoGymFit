@@ -136,10 +136,8 @@ export default function PostDetalle() {
 
   function volver() {
     vibrate(12);
-    if (esParticipante) {
-      if (window.history.length > 1) navigate(-1);
-      else navigate('/feed');
-    } else navigate('/');
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/feed');
   }
 
   // ——— Estados de carga / error
@@ -149,8 +147,8 @@ export default function PostDetalle() {
         <div className="pd-novale">
           <span className="noti-vacio-icon">🤔</span>
           <h2>Enlace no válido</h2>
-          <p>Este enlace no corresponde a ningún reto.</p>
-          <button className="btn-dark" type="button" onClick={() => navigate('/')}>Ir al inicio</button>
+          <p>Este enlace no corresponde a ninguna publicación del reto.</p>
+          {esParticipante && <button className="btn-dark" type="button" onClick={() => navigate('/')}>Ir al inicio</button>}
         </div>
       </div>
     );
@@ -164,14 +162,19 @@ export default function PostDetalle() {
 
   return (
     <div className="app-shell pd-shell">
-      {/* Barra superior flotante: volver / marca + compartir */}
+      {/* Barra superior flotante: volver (solo participantes) / marca + compartir.
+          Para un visitante externo NO hay puertas hacia el onboarding: la
+          pantalla es una vitrina de solo lectura. */}
       <header className="pd-top">
-        <button className="pd-volver" type="button" aria-label={esParticipante ? 'Volver' : 'Ir al inicio'} onClick={volver}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-        </button>
+        {esParticipante && (
+          <button className="pd-volver" type="button" aria-label="Volver" onClick={volver}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+          </button>
+        )}
+        {!esParticipante && <span className="pd-marca-mini pd-marca-logo">{retoURL.marca}</span>}
         <div className="pd-marca">
           <b>{retoURL.nombre}</b>
-          <span>Publicación del equipo</span>
+          <span>{esParticipante ? 'Publicación del equipo' : 'Comunidad privada'}</span>
         </div>
         {post && (
           <button className="pd-compartir" type="button" aria-label="Compartir publicación" onClick={compartir}>
@@ -198,7 +201,7 @@ export default function PostDetalle() {
           <span className="noti-vacio-icon">🗑️</span>
           <h2>Ya no está aquí</h2>
           <p>Esta publicación fue eliminada o el enlace no es correcto.</p>
-          <button className="btn-dark" type="button" onClick={volver}>{esParticipante ? 'Volver al feed' : 'Ir al inicio'}</button>
+          {esParticipante && <button className="btn-dark" type="button" onClick={volver}>Volver al feed</button>}
         </div>
       )}
 
@@ -280,15 +283,12 @@ export default function PostDetalle() {
             )}
           </div>
 
-          {/* ——— Invitación para visitantes ——— */}
+          {/* ——— Sello de exclusividad para visitantes: pueden VER, pero el
+              acceso es solo del equipo (sin puertas al onboarding) ——— */}
           {!esParticipante && (
-            <div className="pd-cta-anon">
-              <span className="pd-cta-marca">{retoURL.marca}</span>
-              <div>
-                <b>¿Eres parte del reto?</b>
-                <p>Entra con tu perfil para reaccionar y comentar con el equipo.</p>
-              </div>
-              <button className="btn-dark" type="button" onClick={() => { vibrate(15); navigate('/'); }}>Entrar</button>
+            <div className="pd-privado">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 118 0v4" /></svg>
+              <span>Comunidad privada del reto — solo el equipo puede reaccionar y comentar.</span>
             </div>
           )}
 

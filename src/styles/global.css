@@ -1402,24 +1402,17 @@ body[data-reto='damas'] .pd-marca-mini { background: linear-gradient(135deg, var
 .pd-reacciones.solo-lectura .reaction-chip { cursor: default; }
 .pd-sin-reacciones { font-size: 12px; color: var(--text-low); font-family: var(--serif); font-style: italic; }
 
-/* Invitación para visitantes (link compartido, sin sesión) */
-.pd-cta-anon {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  background:
-    radial-gradient(130% 100% at 0% 0%, var(--acc-soft), transparent 60%),
-    var(--surface-2);
-  border: 1px solid var(--acc-glow); border-radius: 16px;
-  padding: 14px 16px; margin: 4px 0 14px;
+/* Sello de exclusividad para visitantes (link compartido, sin sesión):
+   informa sin invitar — el acceso es solo del equipo */
+.pd-privado {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface-2); border: 1px dashed var(--border-strong);
+  border-radius: 14px; padding: 12px 14px; margin: 4px 0 14px;
+  font-size: 12px; color: var(--text-mid); line-height: 1.45;
 }
-.pd-cta-marca {
-  flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px;
-  background: var(--acc); color: var(--on-acc); display: grid; place-items: center;
-  font-family: var(--display); font-weight: 800; font-size: 13px;
-}
-.pd-cta-anon > div { flex: 1; min-width: 150px; }
-.pd-cta-anon b { font-family: var(--display); font-size: 14px; }
-.pd-cta-anon p { font-size: 12px; color: var(--text-mid); margin: 2px 0 0; line-height: 1.45; }
-.pd-cta-anon .btn-dark { width: auto; padding: 10px 18px; margin: 0; }
+.pd-privado svg { flex-shrink: 0; color: var(--acc); }
+.pd-marca-logo { margin-right: 2px; }
+.codigo-hint { font-size: 11px; color: var(--text-low); line-height: 1.45; margin: 6px 2px 0; }
 
 .pd-comentarios-head {
   display: flex; align-items: center; gap: 8px;
