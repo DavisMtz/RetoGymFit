@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip,
@@ -360,6 +361,8 @@ export default function Feed() {
   const { reto, usuario } = useAuth();
   const toast = useToast();
   const fileRef = useRef();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [posts, setPosts] = useState(null);
   const [fotos, setFotos] = useState({});     // usuarioId → photoURL
@@ -394,6 +397,22 @@ export default function Feed() {
   }, [reto]);
 
   useEffect(() => { cargarGente().catch(() => {}); }, [cargarGente]);
+
+  // Llegada desde una notificación: desplaza hasta la publicación y resáltala.
+  // El state se limpia para no repetir el efecto al volver a esta pantalla.
+  useEffect(() => {
+    const postId = location.state?.postId;
+    if (!postId || posts === null) return;
+    navigate(location.pathname, { replace: true, state: null });
+    // pequeño margen para que la transición de página no pelee con el scroll
+    setTimeout(() => {
+      const el = document.getElementById(`post-${postId}`);
+      if (!el) { toast('Esa publicación ya no está en el feed reciente'); return; }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('post-destacado');
+      setTimeout(() => el.classList.remove('post-destacado'), 2600);
+    }, 350);
+  }, [location.state, location.pathname, posts, navigate, toast]);
 
   const ptr = usePullToRefresh(() => cargarGente().catch(() => {}));
 
@@ -491,7 +510,7 @@ export default function Feed() {
         <div className="rank-empty">Nadie ha publicado aún. ¡Rompe el hielo con tu primera foto! 📸</div>
       )}
       {(posts || []).map((p, i) => (
-        <div key={p.id} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
+        <div key={p.id} id={`post-${p.id}`} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
           <Post
             reto={reto}
             post={p}

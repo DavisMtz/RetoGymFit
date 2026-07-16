@@ -48,9 +48,10 @@ service cloud.firestore {
           && request.resource.data.estado == 'Activo';
         allow update: if request.auth != null
           && request.auth.token.email != null
-          // solo campos de sesión + foto de perfil + token de push, nada más
+          // solo campos de sesión + foto de perfil + token de push + marca
+          // de lectura de notificaciones, nada más
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'photoURL', 'fcmToken'])
+               .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'photoURL', 'fcmToken', 'notifVistoEn'])
           // reclamar solo si está libre, o si ya eres el dueño
           && (!('authUid' in resource.data) || resource.data.authUid == null
               || resource.data.authUid == request.auth.uid)
@@ -63,7 +64,10 @@ service cloud.firestore {
           // token de FCM para notificaciones push (string acotado)
           && (!('fcmToken' in request.resource.data)
               || (request.resource.data.fcmToken is string
-                  && request.resource.data.fcmToken.size() <= 512));
+                  && request.resource.data.fcmToken.size() <= 512))
+          // marca de lectura de la bandeja de notificaciones (timestamp)
+          && (!('notifVistoEn' in request.resource.data)
+              || request.resource.data.notifVistoEn is timestamp);
       }
 
       match /registros/{registroId} {
@@ -113,6 +117,36 @@ service cloud.firestore {
           && request.resource.data.detalle.size() <= 120
           && request.resource.data.postTexto is string
           && request.resource.data.postTexto.size() <= 80;
+      }
+
+      // ——— Bandeja de notificaciones in-app (independiente de `eventos`,
+      // que el Apps Script borra tras enviar el push). Cada acción social
+      // escribe aquí una copia dirigida; cada quien LEE y BORRA solo lo suyo.
+      // El estado leído/no leído no vive aquí: es la marca `notifVistoEn`
+      // del documento del usuario.
+      match /notificaciones/{notifId} {
+        allow read: if esAdmin()
+          || (request.auth != null && resource.data.paraAuthUid == request.auth.uid);
+        allow update: if esAdmin();
+        allow delete: if esAdmin()
+          || (request.auth != null && resource.data.paraAuthUid == request.auth.uid);
+        allow create: if request.auth != null
+          && request.auth.token.email != null
+          && request.resource.data.deAuthUid == request.auth.uid
+          && request.resource.data.tipo in ['reaccion', 'comentario', 'highfive', 'mencion']
+          && request.resource.data.deNombre is string
+          && request.resource.data.deNombre.size() <= 80
+          && request.resource.data.deUsuarioId is string
+          && request.resource.data.deUsuarioId.size() <= 80
+          && request.resource.data.paraAuthUid is string
+          && request.resource.data.paraAuthUid.size() <= 128
+          && request.resource.data.detalle is string
+          && request.resource.data.detalle.size() <= 120
+          && request.resource.data.postTexto is string
+          && request.resource.data.postTexto.size() <= 80
+          // referencia al post para navegar al tocar la notificación
+          && request.resource.data.postId is string
+          && request.resource.data.postId.size() <= 40;
       }
 
       // ——— Feed social: publicaciones con texto/foto, reacciones y comentarios.

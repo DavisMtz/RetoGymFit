@@ -163,6 +163,24 @@ body[data-reto='damas'] .brand-avatar-badge { background: linear-gradient(135deg
 .rules-pill svg { color: var(--acc); }
 .rules-pill:hover { color: var(--acc); border-color: var(--acc); box-shadow: 0 0 14px -6px var(--acc-glow); }
 .rules-pill:active { transform: scale(0.93); }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ——— Campanita de notificaciones ——— */
+.noti-btn {
+  position: relative; width: 34px; height: 34px; flex-shrink: 0;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px;
+  display: grid; place-items: center; color: var(--text-mid); cursor: pointer;
+  transition: all 0.25s var(--spring-soft);
+}
+.noti-btn:hover { color: var(--acc); border-color: var(--acc); box-shadow: 0 0 14px -6px var(--acc-glow); }
+.noti-btn:active { transform: scale(0.9); }
+.noti-dot {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px;
+  padding: 0 4px; border-radius: 999px; background: var(--acc); color: var(--on-acc);
+  border: 2px solid var(--bg); display: grid; place-items: center;
+  font-family: var(--display); font-size: 9px; font-weight: 800; line-height: 1;
+  animation: pop 0.35s var(--spring) both, pulse-glow 2.4s ease-in-out 0.5s infinite;
+}
 .brand-mark {
   width: 36px; height: 36px; border-radius: 10px;
   background: var(--acc); color: var(--on-acc);
@@ -1223,6 +1241,60 @@ input:disabled { opacity: 0.55; }
 .equipo-det-hora {
   display: flex; align-items: center; gap: 5px; flex-shrink: 0;
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--acc);
+}
+
+/* ——— Bandeja de notificaciones ——— */
+.noti-sheet { max-height: 78vh; }
+.noti-row {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left;
+  background: none; border: none; border-bottom: 1px solid var(--border);
+  padding: 13px 4px; cursor: pointer; font-family: inherit; color: inherit;
+  opacity: 0; animation: noti-in 0.45s var(--soft) both;
+  transition: background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.noti-row:last-child { border-bottom: none; }
+.noti-row:active { background: var(--surface-1); }
+.noti-row.nueva { background: linear-gradient(90deg, var(--acc-soft), transparent 70%); border-radius: 12px; }
+@keyframes noti-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.noti-av-wrap { position: relative; flex-shrink: 0; }
+.noti-av {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--surface-3); display: grid; place-items: center;
+  font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--text-mid);
+  background-size: cover; background-position: center;
+}
+.noti-icono {
+  position: absolute; bottom: -4px; right: -5px; font-size: 13px; line-height: 1;
+  background: var(--surface-2); border: 1.5px solid var(--bg); border-radius: 999px;
+  padding: 2.5px; display: grid; place-items: center;
+}
+.noti-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.noti-texto { font-size: 13.5px; line-height: 1.35; }
+.noti-texto b { font-family: var(--display); font-weight: 700; }
+.noti-detalle {
+  font-size: 12px; color: var(--text-mid); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.noti-hace { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; color: var(--text-low); margin-top: 2px; }
+.noti-row.nueva .noti-hace { color: var(--acc); }
+.noti-punto {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--acc);
+  flex-shrink: 0; margin-top: 6px; box-shadow: 0 0 8px var(--acc-glow);
+  animation: pop 0.35s var(--spring) both;
+}
+.noti-vacio {
+  text-align: center; padding: 42px 20px; color: var(--text-low);
+  font-size: 13.5px; line-height: 1.6;
+}
+.noti-vacio-icon { display: block; font-size: 34px; margin-bottom: 10px; }
+
+/* Post resaltado al llegar desde una notificación */
+.post-destacado { animation: post-flash 2.6s var(--soft) both; border-radius: var(--r-md); }
+@keyframes post-flash {
+  0% { box-shadow: 0 0 0 2px var(--acc), 0 0 26px var(--acc-glow); }
+  70% { box-shadow: 0 0 0 2px var(--acc), 0 0 18px var(--acc-glow); }
+  100% { box-shadow: 0 0 0 2px transparent, 0 0 0 transparent; }
 }
 
 /* ——— High-five ——— */

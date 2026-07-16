@@ -24,6 +24,14 @@
         { "fieldPath": "tipo", "order": "ASCENDING" },
         { "fieldPath": "mes", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "notificaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "paraAuthUid", "order": "ASCENDING" },
+        { "fieldPath": "creadoEn", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -400,6 +400,15 @@ export async function enviarHighFive(retoId, deUsuario, paraUsuario) {
     postTexto: '',
     creadoEn: serverTimestamp(),
   });
+  crearNotificacion(retoId, {
+    tipo: 'highfive',
+    deUsuarioId: deUsuario?.id || '',
+    deNombre: deUsuario?.nombre || 'Alguien',
+    paraAuthUid: paraUsuario.authUid,
+    detalle: '🖐️',
+    postTexto: '',
+    postId: '',
+  });
 }
 
 /**
@@ -419,6 +428,15 @@ export function notificarMenciones(retoId, post, usuario, texto, mencionados) {
       postTexto: String(post?.texto || '').slice(0, 80),
       creadoEn: serverTimestamp(),
     }).catch(() => { /* no crítico */ });
+    crearNotificacion(retoId, {
+      tipo: 'mencion',
+      deUsuarioId: usuario?.id || '',
+      deNombre: usuario?.nombre || 'Alguien',
+      paraAuthUid: m.authUid,
+      detalle: String(texto || '').slice(0, 120),
+      postTexto: String(post?.texto || '').slice(0, 80),
+      postId: post?.id || '',
+    });
   });
 }
 
@@ -437,6 +455,68 @@ function registrarEvento(retoId, post, usuario, tipo, detalle) {
     postTexto: String(post.texto || '').slice(0, 80),
     creadoEn: serverTimestamp(),
   }).catch(() => { /* la notificación es cortesía; no bloquea la acción */ });
+  crearNotificacion(retoId, {
+    tipo,
+    deUsuarioId: usuario?.id || '',
+    deNombre: usuario?.nombre || 'Alguien',
+    paraAuthUid: post.authUid,
+    detalle: String(detalle || '').slice(0, 120),
+    postTexto: String(post.texto || '').slice(0, 80),
+    postId: post.id || '',
+  });
+}
+
+// ——————————————————————————————— NOTIFICACIONES IN-APP
+// Bandeja propia de la app, independiente de los `eventos` de push (que el
+// Apps Script borra tras enviarlos). Cada acción social escribe también aquí
+// y cada quien lee/borra SOLO lo suyo (ver firestore.rules). La marca de
+// lectura vive en el doc del usuario (`notifVistoEn`): todo lo posterior a
+// esa marca está "pendiente"; al abrir la bandeja la marca se actualiza.
+
+function crearNotificacion(retoId, datos) {
+  addDoc(col(retoId, 'notificaciones'), {
+    ...datos,
+    deAuthUid: auth.currentUser.uid,
+    creadoEn: serverTimestamp(),
+  }).catch(() => { /* cortesía: nunca bloquea la acción original */ });
+}
+
+/** Bandeja en vivo del usuario actual (más recientes primero). Devuelve unsubscribe. */
+export function suscribirNotificaciones(retoId, cb, onError, max = 30) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return () => {};
+  const q = query(
+    col(retoId, 'notificaciones'),
+    where('paraAuthUid', '==', uid),
+    orderBy('creadoEn', 'desc'),
+    limit(max),
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(err),
+  );
+}
+
+/** Marca la bandeja como vista: todo lo anterior a "ahora" queda leído. */
+export async function marcarNotificacionesVistas(retoId, usuarioId) {
+  try {
+    await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { notifVistoEn: serverTimestamp() });
+  } catch { /* sin conexión: se reintenta en la próxima apertura */ }
+}
+
+/**
+ * Poda de la bandeja: borra las notificaciones ya leídas con más de 7 días
+ * (ya fueron consultadas; desaparecen para no acumularse). Fire-and-forget.
+ */
+export function podarNotificacionesLeidas(retoId, notifs, vistoEnMs) {
+  const corte = Date.now() - 7 * 86400000;
+  (notifs || []).forEach((n) => {
+    const t = n.creadoEn?.toDate ? n.creadoEn.toDate().getTime() : Date.now();
+    if (t < vistoEnMs && t < corte) {
+      deleteDoc(doc(db, 'retos', retoId, 'notificaciones', n.id)).catch(() => {});
+    }
+  });
 }
 
 /** Reacciona con un emoji, o pasa null para quitar tu reacción. */
