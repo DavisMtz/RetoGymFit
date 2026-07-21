@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { DIAS_CORTOS, hoyMX, semanaISO, diasHasta } from '../lib/dates';
 import { abrirAvatar, punch } from '../lib/anim';
 import ReglasSheet from './Reglas';
+import NotiCampana from './Notificaciones';
 
 export const vibrate = (ms = 25) => { if (navigator.vibrate) navigator.vibrate(ms); };
 
@@ -110,10 +111,13 @@ export function Header({ reto }) {
           <span>Disciplina · Constancia</span>
         </div>
       </NavLink>
-      <button className="rules-pill" type="button" onClick={() => { vibrate(15); setReglas(true); }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z" /></svg>
-        Reglas
-      </button>
+      <div className="header-actions">
+        <NotiCampana />
+        <button className="rules-pill" type="button" onClick={() => { vibrate(15); setReglas(true); }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z" /></svg>
+          Reglas
+        </button>
+      </div>
       <ReglasSheet reto={reto} abierto={reglas} onClose={() => setReglas(false)} />
     </header>
   );

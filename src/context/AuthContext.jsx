@@ -17,9 +17,10 @@ import {
   EmailAuthProvider, linkWithCredential, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, updatePassword,
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '../firebase';
 import { getReto } from '../config/retos';
-import { obtenerUsuario, reclamarUsuario, marcarAcceso } from '../data/queries';
+import { obtenerUsuario, marcarAcceso } from '../data/queries';
 
 const SESSION_KEY = 'rgf_session_v1';
 const ADMIN_EMAIL = 'admin@retogymfit.app';
@@ -92,19 +93,35 @@ export function AuthProvider({ children }) {
     return () => { activo = false; };
   }, [sesion, firebaseUser]);
 
-  /** Primera vez: crear contraseña y reclamar el perfil */
-  const crearCuenta = useCallback(async (retoId, usuarioDoc, password) => {
+  /**
+   * Primera vez: crear contraseña y reclamar el perfil. El reclamo lo hace
+   * la Cloud Function `reclamarPerfil`, que exige el código del equipo —
+   * un extraño ya no puede apropiarse de perfiles sin contraseña. Si el
+   * reclamo falla, la cuenta recién creada se deshace para no dejarla
+   * huérfana.
+   */
+  const crearCuenta = useCallback(async (retoId, usuarioDoc, password, codigo) => {
     const email = emailSintetico(retoId, usuarioDoc.id, usuarioDoc.resetGen || 0);
     const cred = EmailAuthProvider.credential(email, password);
     let user;
     if (auth.currentUser?.isAnonymous) {
       ({ user } = await linkWithCredential(auth.currentUser, cred));
-      // refrescar el token para que las reglas vean el email ya vinculado
+      // refrescar el token para que el backend vea el email ya vinculado
       await user.getIdToken(true);
     } else {
       ({ user } = await createUserWithEmailAndPassword(auth, email, password));
     }
-    await reclamarUsuario(retoId, usuarioDoc, user.uid);
+    try {
+      await httpsCallable(functions, 'reclamarPerfil')({
+        retoId,
+        usuarioId: usuarioDoc.id,
+        nombre: usuarioDoc.nombre,
+        codigo,
+      });
+    } catch (err) {
+      try { await user.delete(); } catch { await signOut(auth); }
+      throw err;
+    }
     const s = { retoId, usuarioId: usuarioDoc.id };
     localStorage.setItem(SESSION_KEY, JSON.stringify(s));
     setFirebaseUser(user);

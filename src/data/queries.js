@@ -31,27 +31,9 @@ export async function obtenerUsuario(retoId, usuarioId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * Reclama el perfil: asocia la cuenta de Auth al participante (primera vez).
- * Si el participante viene de la hoja de Google y aún no tiene documento
- * en Firestore, lo crea aquí mismo.
- */
-export async function reclamarUsuario(retoId, usuarioDoc, authUid) {
-  const ref = doc(db, 'retos', retoId, 'usuarios', usuarioDoc.id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    await updateDoc(ref, { authUid, hasPassword: true, ultimoAcceso: serverTimestamp() });
-  } else {
-    await setDoc(ref, {
-      nombre: usuarioDoc.nombre,
-      estado: 'Activo',
-      authUid,
-      hasPassword: true,
-      creadoEn: serverTimestamp(),
-      ultimoAcceso: serverTimestamp(),
-    });
-  }
-}
+// El reclamo del perfil (primera contraseña) vive en la Cloud Function
+// `reclamarPerfil`: exige el código del equipo y valida que la cuenta
+// corresponda al perfil. El cliente ya no escribe ese cambio directamente.
 
 export async function marcarAcceso(retoId, usuarioId, authUid) {
   try {
@@ -187,8 +169,10 @@ export async function obtenerQuienesEntrenaronHoy(retoId) {
     if (r.tipo === 'Periodo Menstrual') return;
     if (vistos.has(r.usuarioId)) return;
     vistos.add(r.usuarioId);
-    lista.push({ usuarioId: r.usuarioId, nombre: r.nombre });
+    lista.push({ usuarioId: r.usuarioId, nombre: r.nombre, creadoEn: r.creadoEn?.toDate?.() || null });
   });
+  // Orden cronológico: quien abrió el marcador va primero
+  lista.sort((a, b) => (a.creadoEn?.getTime() || 0) - (b.creadoEn?.getTime() || 0));
   return lista;
 }
 
@@ -338,6 +322,19 @@ export function suscribirPosts(retoId, cb, onError, max = 30) {
   );
 }
 
+/**
+ * Una publicación en vivo (reacciones/comentarios al momento). La leen
+ * también los visitantes anónimos (link compartido); las reglas solo piden
+ * estar autenticado, y la app entra como anónimo al abrir.
+ */
+export function suscribirPost(retoId, postId, cb, onError) {
+  return onSnapshot(
+    doc(db, 'retos', retoId, 'posts', postId),
+    (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    (err) => onError?.(err),
+  );
+}
+
 export async function publicarPost(retoId, usuario, { texto, fotoURL }) {
   const post = {
     usuarioId: usuario.id,
@@ -398,6 +395,15 @@ export async function enviarHighFive(retoId, deUsuario, paraUsuario) {
     postTexto: '',
     creadoEn: serverTimestamp(),
   });
+  crearNotificacion(retoId, {
+    tipo: 'highfive',
+    deUsuarioId: deUsuario?.id || '',
+    deNombre: deUsuario?.nombre || 'Alguien',
+    paraAuthUid: paraUsuario.authUid,
+    detalle: '🖐️',
+    postTexto: '',
+    postId: '',
+  });
 }
 
 /**
@@ -417,6 +423,15 @@ export function notificarMenciones(retoId, post, usuario, texto, mencionados) {
       postTexto: String(post?.texto || '').slice(0, 80),
       creadoEn: serverTimestamp(),
     }).catch(() => { /* no crítico */ });
+    crearNotificacion(retoId, {
+      tipo: 'mencion',
+      deUsuarioId: usuario?.id || '',
+      deNombre: usuario?.nombre || 'Alguien',
+      paraAuthUid: m.authUid,
+      detalle: String(texto || '').slice(0, 120),
+      postTexto: String(post?.texto || '').slice(0, 80),
+      postId: post?.id || '',
+    });
   });
 }
 
@@ -435,6 +450,68 @@ function registrarEvento(retoId, post, usuario, tipo, detalle) {
     postTexto: String(post.texto || '').slice(0, 80),
     creadoEn: serverTimestamp(),
   }).catch(() => { /* la notificación es cortesía; no bloquea la acción */ });
+  crearNotificacion(retoId, {
+    tipo,
+    deUsuarioId: usuario?.id || '',
+    deNombre: usuario?.nombre || 'Alguien',
+    paraAuthUid: post.authUid,
+    detalle: String(detalle || '').slice(0, 120),
+    postTexto: String(post.texto || '').slice(0, 80),
+    postId: post.id || '',
+  });
+}
+
+// ——————————————————————————————— NOTIFICACIONES IN-APP
+// Bandeja propia de la app, independiente de los `eventos` de push (que el
+// Apps Script borra tras enviarlos). Cada acción social escribe también aquí
+// y cada quien lee/borra SOLO lo suyo (ver firestore.rules). La marca de
+// lectura vive en el doc del usuario (`notifVistoEn`): todo lo posterior a
+// esa marca está "pendiente"; al abrir la bandeja la marca se actualiza.
+
+function crearNotificacion(retoId, datos) {
+  addDoc(col(retoId, 'notificaciones'), {
+    ...datos,
+    deAuthUid: auth.currentUser.uid,
+    creadoEn: serverTimestamp(),
+  }).catch(() => { /* cortesía: nunca bloquea la acción original */ });
+}
+
+/** Bandeja en vivo del usuario actual (más recientes primero). Devuelve unsubscribe. */
+export function suscribirNotificaciones(retoId, cb, onError, max = 30) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return () => {};
+  const q = query(
+    col(retoId, 'notificaciones'),
+    where('paraAuthUid', '==', uid),
+    orderBy('creadoEn', 'desc'),
+    limit(max),
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(err),
+  );
+}
+
+/** Marca la bandeja como vista: todo lo anterior a "ahora" queda leído. */
+export async function marcarNotificacionesVistas(retoId, usuarioId) {
+  try {
+    await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { notifVistoEn: serverTimestamp() });
+  } catch { /* sin conexión: se reintenta en la próxima apertura */ }
+}
+
+/**
+ * Poda de la bandeja: borra las notificaciones ya leídas con más de 7 días
+ * (ya fueron consultadas; desaparecen para no acumularse). Fire-and-forget.
+ */
+export function podarNotificacionesLeidas(retoId, notifs, vistoEnMs) {
+  const corte = Date.now() - 7 * 86400000;
+  (notifs || []).forEach((n) => {
+    const t = n.creadoEn?.toDate ? n.creadoEn.toDate().getTime() : Date.now();
+    if (t < vistoEnMs && t < corte) {
+      deleteDoc(doc(db, 'retos', retoId, 'notificaciones', n.id)).catch(() => {});
+    }
+  });
 }
 
 /** Reacciona con un emoji, o pasa null para quitar tu reacción. */
@@ -454,6 +531,20 @@ export async function obtenerComentarios(retoId, postId) {
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Comentarios en vivo (los nuevos aparecen solos). Devuelve unsubscribe. */
+export function suscribirComentarios(retoId, postId, cb, onError) {
+  const q = query(
+    collection(db, 'retos', retoId, 'posts', postId, 'comentarios'),
+    orderBy('creadoEn', 'asc'),
+    limit(100),
+  );
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => onError?.(err),
+  );
 }
 
 /** Comenta y sube el contador del post en una sola operación atómica. */

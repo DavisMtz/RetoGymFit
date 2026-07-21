@@ -9,6 +9,7 @@ import { entradaPagina } from './lib/anim';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
+import PostDetalle from './screens/PostDetalle';
 import Historial from './screens/Historial';
 import Ranking from './screens/Ranking';
 import Stats from './screens/Stats';
@@ -58,8 +59,12 @@ function Shell() {
   const previo = useRef(autenticado);
   const paginaRef = useRef(null);
 
-  // Transición de página con GSAP: cascada de los bloques de la pantalla
+  // Transición de página con GSAP: cascada de los bloques de la pantalla.
+  // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una
+  // pantalla corta (p. ej. una publicación) hereda el scroll de la anterior
+  // y el contenido queda fuera de vista.
   useEffect(() => {
+    window.scrollTo(0, 0);
     if (!autenticado || esAdmin) return undefined;
     return entradaPagina(paginaRef.current?.firstElementChild);
   }, [location.pathname, autenticado, esAdmin]);
@@ -87,6 +92,17 @@ function Shell() {
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;
+  // Publicación compartida por link: se puede VER sin sesión de participante
+  // (la app entra como anónimo a Firebase, suficiente para leer). La vista
+  // es de solo lectura; para reaccionar o comentar hay que entrar al reto.
+  if (!autenticado && location.pathname.startsWith('/post/')) {
+    return (
+      <Routes location={location}>
+        <Route path="/post/:retoId/:postId" element={<PostDetalle />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
   if (!autenticado) return reconectando ? <Reconectando onSalir={olvidarSesion} /> : <Onboarding />;
   if (esAdmin) return <Suspense fallback={<Boot />}><Admin /></Suspense>;
 
@@ -98,6 +114,7 @@ function Shell() {
         <Routes location={location}>
           <Route path="/" element={<Hoy />} />
           <Route path="/feed" element={<Feed />} />
+          <Route path="/post/:retoId/:postId" element={<PostDetalle />} />
           <Route path="/historial" element={<Historial />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/stats" element={<Stats />} />

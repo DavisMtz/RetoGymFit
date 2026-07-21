@@ -149,18 +149,40 @@ function Celebracion({ reto, datos, onCerrar }) {
   );
 }
 
-/** Barra grupal: quiénes del equipo ya entrenaron hoy. */
+/**
+ * Barra grupal: quiénes del equipo ya entrenaron hoy.
+ * Al tocarla, la tarjeta se expande (morph) y la tira de avatares se
+ * transforma en una lista detallada con nombre y hora del registro.
+ */
 function EquipoHoy({ equipo }) {
+  const [expandido, setExpandido] = useState(false);
   if (!equipo || !equipo.total) return null;
   const n = equipo.entrenaron.length;
   const pct = Math.min((n / equipo.total) * 100, 100);
   const visibles = equipo.entrenaron.slice(0, 8);
   const extra = n - visibles.length;
+  const horaDe = (e) => (e.creadoEn
+    ? e.creadoEn.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Mexico_City' })
+    : '');
+  const toggle = () => { if (!n) return; vibrate(12); setExpandido((v) => !v); };
   return (
-    <div className="equipo-hoy">
+    <div
+      className={`equipo-hoy ${n > 0 ? 'tocable' : ''} ${expandido ? 'expandido' : ''}`}
+      role={n > 0 ? 'button' : undefined}
+      tabIndex={n > 0 ? 0 : undefined}
+      aria-expanded={n > 0 ? expandido : undefined}
+      aria-label={n > 0 ? 'El equipo hoy — toca para ver quiénes ya entrenaron y a qué hora' : undefined}
+      onClick={toggle}
+      onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } }}
+    >
       <div className="equipo-hoy-head">
         <span className="equipo-hoy-label">El equipo hoy</span>
-        <span className="equipo-hoy-num"><b>{n}</b> de {equipo.total}</span>
+        <span className="equipo-hoy-num">
+          <b>{n}</b> de {equipo.total}
+          {n > 0 && (
+            <svg className="equipo-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+          )}
+        </span>
       </div>
       <div className="equipo-avs">
         {n === 0 && <span style={{ fontSize: 12, color: 'var(--text-low)' }}>Nadie ha entrenado aún — abre tú el marcador 🏁</span>}
@@ -178,6 +200,27 @@ function EquipoHoy({ equipo }) {
           </span>
         ))}
         {extra > 0 && <span className="equipo-av mas" style={{ animationDelay: `${visibles.length * 0.05}s` }}>+{extra}</span>}
+      </div>
+      <div className="equipo-detalle" aria-hidden={!expandido}>
+        <div className="equipo-detalle-inner">
+          {equipo.entrenaron.map((e, i) => (
+            <div className="equipo-det-row" key={e.usuarioId} style={{ '--i': i }}>
+              <span
+                className="equipo-det-av"
+                style={equipo.fotos[e.usuarioId] ? { backgroundImage: `url(${equipo.fotos[e.usuarioId]})` } : undefined}
+              >
+                {!equipo.fotos[e.usuarioId] && getInitials(e.nombre)}
+              </span>
+              <span className="equipo-det-nombre">{e.nombre}</span>
+              {horaDe(e) && (
+                <span className="equipo-det-hora">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                  {horaDe(e)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
       <div className="equipo-track"><div className="equipo-fill" style={{ width: `${pct}%` }} /></div>
     </div>
