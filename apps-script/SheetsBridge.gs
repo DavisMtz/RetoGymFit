@@ -7,9 +7,17 @@
  *   1. Recibe registros de la app (doPost) y los agrega a la hoja del reto.
  *   2. Sirve la lista de participantes a la app (doGet ?accion=usuarios).
  *   3. ESPEJA las hojas → Firestore: participantes, registros y pagos.
+ *      Solo escribe en Firestore las filas que REALMENTE cambiaron desde el
+ *      último espejo (compara un hash guardado en la pestaña oculta
+ *      _SyncCache de cada hoja) — evitar reescribir todo cada vez es lo que
+ *      mantiene esto dentro de la cuota gratuita de Firestore (20k
+ *      escrituras/día en el plan Spark).
  *      - Importación inicial + resincronización manual: sincronizarTodo()
  *      - Automático al editar una hoja: trigger onEditEspejo
- *      - Red de seguridad: trigger cada 15 min
+ *      - Red de seguridad: trigger 1 vez al día (4am). Los datos que
+ *        consulta la app YA salen de Firestore en tiempo real — este
+ *        resync diario es solo para que una edición manual en Sheets que
+ *        onEdit no haya capturado no se quede desfasada más de un día.
  *
  * ┌─────────────────────────────────────────────────────────────────┐
  * │ INSTALACIÓN (una sola vez)                                        │
@@ -81,7 +89,7 @@ function doPost(e) {
       out.success = true;
     } else if (body.accion === 'registro-borrar') {
       // Borrado del admin: elimina la fila de la hoja para que el espejo
-      // de 15 min no reviva el registro ya borrado en Firestore
+      // (onEdit o el resync diario) no reviva el registro ya borrado en Firestore
       var rb = body.registro;
       var hojaB = hojaRegistros_(body.retoId);
       var filaB = buscarFilaRegistro_(hojaB, rb.nombre, rb.fecha);
@@ -167,9 +175,9 @@ function configurarEspejo() {
   for (var reto in HOJAS) {
     ScriptApp.newTrigger('onEditEspejo').forSpreadsheet(HOJAS[reto]).onEdit().create();
   }
-  ScriptApp.newTrigger('sincronizarTodo').timeBased().everyMinutes(15).create();
+  ScriptApp.newTrigger('sincronizarTodo').timeBased().everyDays(1).atHour(4).create();
   Logger.log('✅ Espejo configurado. ' + resumen);
-  Logger.log('Triggers: onEdit en ambas hojas + resync cada 15 min.');
+  Logger.log('Triggers: onEdit en ambas hojas + resync diario (4am).');
   return resumen;
 }
 
@@ -197,31 +205,39 @@ function sincronizarTodo() {
 
 function sincronizarReto_(reto) {
   var ss = SpreadsheetApp.openById(HOJAS[reto]);
+  var hashesPrevios = leerCacheHashes_(ss);
+  var hashesNuevos = {};
   var writes = [];
 
   // — Usuarios (Col A: Nombre, B: Estado). updateMask preserva authUid/hasPassword.
   var hu = ss.getSheetByName('Usuarios');
-  var nU = 0;
+  var nU = 0, nUcambiados = 0;
   if (hu && hu.getLastRow() > 1) {
     var du = hu.getRange(2, 1, hu.getLastRow() - 1, 2).getValues();
     for (var i = 0; i < du.length; i++) {
       var nombre = String(du[i][0] || '').trim();
       if (!nombre) continue;
       var estado = String(du[i][1] || '').trim() === 'Activo' ? 'Activo' : 'Inactivo';
+      var idU = 'usuarios/' + slug_(nombre);
+      var fieldsU = { nombre: sv_(nombre), estado: sv_(estado) };
+      var hashU = hashFields_(fieldsU);
+      hashesNuevos[idU] = hashU;
+      nU++;
+      if (hashesPrevios[idU] === hashU) continue; // sin cambios: no gastar escritura
       writes.push({
         update: {
           name: docName_(reto, 'usuarios', slug_(nombre)),
-          fields: { nombre: sv_(nombre), estado: sv_(estado) },
+          fields: fieldsU,
         },
         updateMask: { fieldPaths: ['nombre', 'estado'] },
       });
-      nU++;
+      nUcambiados++;
     }
   }
 
   // — Registros (A:Timestamp B:Usuario C:Fecha D:Tipo E:Min F:Kcal G:Evid H:Estatus I:Notas)
   var hr = ss.getSheetByName('Registros');
-  var nR = 0;
+  var nR = 0, nRcambiados = 0;
   if (hr && hr.getLastRow() > 1) {
     var dr = hr.getRange(2, 1, hr.getLastRow() - 1, 9).getValues();
     for (var j = 0; j < dr.length; j++) {
@@ -231,47 +247,106 @@ function sincronizarReto_(reto) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
       var uid = slug_(usuario);
       var creado = dr[j][0] instanceof Date ? dr[j][0] : new Date();
+      var idR = 'registros/' + uid + '_' + fecha;
+      var fieldsR = {
+        usuarioId: sv_(uid), nombre: sv_(usuario), fecha: sv_(fecha),
+        semanaIso: iv_(semanaIso_(fecha)), anioIso: iv_(anioIso_(fecha)), mes: sv_(fecha.slice(0, 7)),
+        tipo: sv_(String(dr[j][3] || '')),
+        minutos: iv_(Number(dr[j][4]) || 0), calorias: iv_(Number(dr[j][5]) || 0),
+        evidencia: sv_(String(dr[j][6] || '')), estatus: sv_(String(dr[j][7] || 'N/A')),
+        notas: sv_(String(dr[j][8] || '')),
+        creadoEn: tv_(creado.toISOString()), origenHoja: bv_(true),
+      };
+      var hashR = hashFields_(fieldsR);
+      hashesNuevos[idR] = hashR;
+      nR++;
+      if (hashesPrevios[idR] === hashR) continue;
       writes.push({
         update: {
           name: docName_(reto, 'registros', uid + '_' + fecha),
-          fields: {
-            usuarioId: sv_(uid), nombre: sv_(usuario), fecha: sv_(fecha),
-            semanaIso: iv_(semanaIso_(fecha)), anioIso: iv_(anioIso_(fecha)), mes: sv_(fecha.slice(0, 7)),
-            tipo: sv_(String(dr[j][3] || '')),
-            minutos: iv_(Number(dr[j][4]) || 0), calorias: iv_(Number(dr[j][5]) || 0),
-            evidencia: sv_(String(dr[j][6] || '')), estatus: sv_(String(dr[j][7] || 'N/A')),
-            notas: sv_(String(dr[j][8] || '')),
-            creadoEn: tv_(creado.toISOString()), origenHoja: bv_(true),
-          },
+          fields: fieldsR,
         },
       });
-      nR++;
+      nRcambiados++;
     }
   }
 
   // — Pagos (A:Fecha B:Usuario C:Monto D:Notas). id por fila = idempotente.
   var hp = ss.getSheetByName('Pagos');
-  var nP = 0;
+  var nP = 0, nPcambiados = 0;
   if (hp && hp.getLastRow() > 1) {
     var dp = hp.getRange(2, 1, hp.getLastRow() - 1, 4).getValues();
     for (var k = 0; k < dp.length; k++) {
       var monto = parseFloat(dp[k][2]);
       if (isNaN(monto)) continue;
+      var idP = 'pagos/fila' + (k + 2);
+      var fieldsP = {
+        fecha: sv_(dp[k][0] ? ymd_(dp[k][0]) : ''), usuario: sv_(String(dp[k][1] || '')),
+        monto: dv_(monto), notas: sv_(String(dp[k][3] || '')),
+      };
+      var hashP = hashFields_(fieldsP);
+      hashesNuevos[idP] = hashP;
+      nP++;
+      if (hashesPrevios[idP] === hashP) continue;
       writes.push({
         update: {
           name: docName_(reto, 'pagos', 'fila' + (k + 2)),
-          fields: {
-            fecha: sv_(dp[k][0] ? ymd_(dp[k][0]) : ''), usuario: sv_(String(dp[k][1] || '')),
-            monto: dv_(monto), notas: sv_(String(dp[k][3] || '')),
-          },
+          fields: fieldsP,
         },
       });
-      nP++;
+      nPcambiados++;
     }
   }
 
   batchWrite_(writes);
-  return reto + ': ' + nU + ' usuarios, ' + nR + ' registros, ' + nP + ' pagos';
+  escribirCacheHashes_(ss, hashesNuevos);
+  return reto + ': ' + nU + ' usuarios (' + nUcambiados + ' cambiados), '
+    + nR + ' registros (' + nRcambiados + ' cambiados), '
+    + nP + ' pagos (' + nPcambiados + ' cambiados)';
+}
+
+// ————————————————————————————————— Caché de hashes (detección de cambios)
+//
+// Pestaña oculta _SyncCache dentro de CADA hoja del reto: una fila por
+// documento (docId relativo, p. ej. "registros/serch_2026-07-24") con el
+// hash MD5 de sus campos la última vez que se escribió en Firestore. Vive
+// en la propia hoja (no en PropertiesService) porque con cientos de
+// registros acumulados se pasaría del límite de 500 propiedades/9 KB de
+// Apps Script; una pestaña de Sheets no tiene ese techo.
+var SYNC_CACHE_TAB_ = '_SyncCache';
+
+function leerCacheHashes_(ss) {
+  var hoja = ss.getSheetByName(SYNC_CACHE_TAB_);
+  var mapa = {};
+  if (!hoja || hoja.getLastRow() < 1) return mapa;
+  var datos = hoja.getRange(1, 1, hoja.getLastRow(), 2).getValues();
+  for (var i = 0; i < datos.length; i++) {
+    if (datos[i][0]) mapa[datos[i][0]] = datos[i][1];
+  }
+  return mapa;
+}
+
+function escribirCacheHashes_(ss, mapa) {
+  var hoja = ss.getSheetByName(SYNC_CACHE_TAB_);
+  if (!hoja) {
+    hoja = ss.insertSheet(SYNC_CACHE_TAB_);
+    hoja.hideSheet();
+  }
+  hoja.clearContents();
+  var filas = [];
+  for (var id in mapa) filas.push([id, mapa[id]]);
+  if (filas.length) hoja.getRange(1, 1, filas.length, 2).setValues(filas);
+}
+
+/** Hash MD5 corto y estable de los campos de un documento (para diffing). */
+function hashFields_(fields) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(fields), Utilities.Charset.UTF_8);
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
+    hex += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return hex;
 }
 
 // ════════════════════════════════════════════════════════════════
