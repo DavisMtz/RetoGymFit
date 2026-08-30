@@ -1,0 +1,14 @@
+{
+  "name": "retogymfit-og-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Vista previa Open Graph de posts compartidos, en Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:refresh-token": "wrangler secret put FIREBASE_REFRESH_TOKEN"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  }
+}

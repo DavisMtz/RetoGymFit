@@ -1,0 +1,12 @@
+name = "retogymfit-og"
+main = "src/index.js"
+compatibility_date = "2026-08-28"
+
+routes = [
+  { pattern = "og-retogymfit.logidma.com", custom_domain = true }
+]
+
+[vars]
+FIREBASE_API_KEY = "AIzaSyDQwFU9hcM1iJbRJW5zArdhvlV-vqaRIQE"
+FIREBASE_PROJECT_ID = "retogymfit"
+APP_ORIGIN = "https://retogymfit.web.app"

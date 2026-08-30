@@ -1,6 +1,7 @@
 /**
  * Pantalla de una publicación — cada post tiene su propia URL compartible:
- *   #/post/{retoId}/{postId}   (y /p/{retoId}/{postId} para las redes)
+ *   #/post/{retoId}/{postId}   (y og-retogymfit.logidma.com/{retoId}/{postId}
+ *   para las redes, ver og-worker/)
  *
  * El contenido protagonista depende del tipo de publicación:
  *   foto → imagen a sangre con degradado · registro → tarjeta héroe de la
@@ -25,6 +26,9 @@ import { punch, particulasEmoji } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
+// Vista previa Open Graph para WhatsApp/redes: la sirve un Worker de
+// Cloudflare aparte (og-worker/), no Firebase Hosting — ver esa carpeta.
+const OG_ORIGIN = 'https://og-retogymfit.logidma.com';
 
 function fechaCompleta(ts) {
   if (!ts?.toDate) return '';
@@ -122,9 +126,9 @@ export default function PostDetalle() {
 
   async function compartir() {
     vibrate(15);
-    // URL limpia /p/... : la función `ogpost` le da a WhatsApp/redes una
-    // vista previa con la miniatura de la foto y el texto, y redirige a la app
-    const url = `${window.location.origin}/p/${retoId}/${postId}`;
+    // URL limpia del Worker: le da a WhatsApp/redes una vista previa con la
+    // miniatura de la foto y el texto, y redirige a la app
+    const url = `${OG_ORIGIN}/${retoId}/${postId}`;
     const titulo = post?.texto
       ? `“${post.texto.slice(0, 120)}${post.texto.length > 120 ? '…' : ''}” — ${post.nombre}`
       : `Publicación de ${post?.nombre || 'el equipo'} en ${retoURL.nombre}`;
