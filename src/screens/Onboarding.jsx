@@ -6,8 +6,6 @@
  * Al entrar, la sesión queda guardada en el dispositivo.
  */
 import { useState, useEffect, useMemo } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase';
 import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos } from '../data/queries';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
@@ -48,7 +46,6 @@ export default function Onboarding() {
   const [elegido, setElegido] = useState(null);
   const [pass, setPass] = useState('');
   const [pass2, setPass2] = useState('');
-  const [codigo, setCodigo] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [modalOlvido, setModalOlvido] = useState(false);
@@ -124,18 +121,13 @@ export default function Onboarding() {
     setError('');
     if (pass.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
     if (!tienePass && pass !== pass2) { setError('Las contraseñas no coinciden.'); return; }
-    if (!tienePass && !codigo.trim()) { setError('Escribe el código del equipo (pídelo en el grupo).'); return; }
     setEnviando(true);
     vibrate(40);
     try {
       if (tienePass) {
         await iniciarSesion(reto.id, elegido, pass);
       } else {
-        // Valida el código ANTES de crear la cuenta: si no es el del equipo,
-        // no se crea nada (evita cuentas huérfanas y perfiles secuestrados)
-        const { data } = await httpsCallable(functions, 'validarCodigoAcceso')({ retoId: reto.id, codigo: codigo.trim() });
-        if (!data?.valido) { setError('Código del equipo incorrecto. Pídelo en el grupo del reto.'); setEnviando(false); return; }
-        await crearCuenta(reto.id, elegido, pass, codigo.trim());
+        await crearCuenta(reto.id, elegido, pass);
       }
     } catch (err) {
       setError(mensajeError(err));
@@ -259,7 +251,7 @@ export default function Onboarding() {
               type="button"
               className="person-row"
               style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}
-              onClick={() => { vibrate(); setElegido(u); setPass(''); setPass2(''); setCodigo(''); setError(''); setPaso(3); }}
+              onClick={() => { vibrate(); setElegido(u); setPass(''); setPass2(''); setError(''); setPaso(3); }}
             >
               <Avatar nombre={u.nombre} url={u.photoURL} className="person-av" />
               <div className="person-info">
@@ -301,20 +293,6 @@ export default function Onboarding() {
             <div className="field">
               <label className="field-label">Confírmala</label>
               <input type="password" value={pass2} placeholder="••••••••" onChange={(e) => setPass2(e.target.value)} />
-            </div>
-          )}
-          {!tienePass && (
-            <div className="field">
-              <label className="field-label">Código del equipo</label>
-              <input
-                type="text"
-                value={codigo}
-                placeholder="El código que compartió tu grupo"
-                autoComplete="off"
-                autoCapitalize="characters"
-                onChange={(e) => setCodigo(e.target.value)}
-              />
-              <p className="codigo-hint">Es la llave del reto: solo los del grupo la tienen. Pídela en el chat del equipo.</p>
             </div>
           )}
           <p className="error-text">{error}</p>

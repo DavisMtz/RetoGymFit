@@ -27,5 +27,5 @@ export const db = initializeFirestore(app, {
 
 export const storage = getStorage(app);
 
-// Cloud Functions (us-central1): reclamo de perfiles con código del equipo
+// Cloud Functions (us-central1): reclamo de perfiles
 export const functions = getFunctions(app);

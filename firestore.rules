@@ -35,10 +35,10 @@ service cloud.firestore {
         allow write: if esAdmin();
         allow delete: if false;
         // El reclamo de perfiles (primera contraseña, o tras un reinicio de
-        // acceso) pasa por la Cloud Function `reclamarPerfil`, que exige el
-        // código del equipo: el cliente ya NO puede crear documentos de
-        // participante ni apropiarse de perfiles libres. Aquí solo el DUEÑO
-        // actual actualiza sus campos de sesión.
+        // acceso) pasa por la Cloud Function `reclamarPerfil`: el cliente ya
+        // NO puede crear documentos de participante ni apropiarse de
+        // perfiles libres. Aquí solo el DUEÑO actual actualiza sus campos
+        // de sesión.
         allow update: if request.auth != null
           && request.auth.token.email != null
           // solo campos de sesión + foto de perfil + token de push + marca
@@ -92,8 +92,7 @@ service cloud.firestore {
         allow write: if esAdmin();
       }
 
-      // ——— Configuración privada del reto (p. ej. el código de acceso del
-      // equipo en privado/acceso → { codigo }): la leen solo las Cloud
+      // ——— Configuración privada del reto: la leen solo las Cloud
       // Functions (Admin SDK) y el super usuario. Ningún cliente.
       match /privado/{docId} {
         allow read, write: if esAdmin();

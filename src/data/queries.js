@@ -32,8 +32,8 @@ export async function obtenerUsuario(retoId, usuarioId) {
 }
 
 // El reclamo del perfil (primera contraseña) vive en la Cloud Function
-// `reclamarPerfil`: exige el código del equipo y valida que la cuenta
-// corresponda al perfil. El cliente ya no escribe ese cambio directamente.
+// `reclamarPerfil`: valida que la cuenta corresponda al perfil. El cliente
+// ya no escribe ese cambio directamente.
 
 export async function marcarAcceso(retoId, usuarioId, authUid) {
   try {

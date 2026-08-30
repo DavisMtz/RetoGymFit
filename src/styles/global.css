@@ -1412,7 +1412,6 @@ body[data-reto='damas'] .pd-marca-mini { background: linear-gradient(135deg, var
 }
 .pd-privado svg { flex-shrink: 0; color: var(--acc); }
 .pd-marca-logo { margin-right: 2px; }
-.codigo-hint { font-size: 11px; color: var(--text-low); line-height: 1.45; margin: 6px 2px 0; }
 
 .pd-comentarios-head {
   display: flex; align-items: center; gap: 8px;

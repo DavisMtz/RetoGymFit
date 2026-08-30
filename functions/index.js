@@ -88,40 +88,11 @@ exports.ogpost = onRequest({ region: 'us-central1', memory: '256MiB', maxInstanc
 });
 
 // ————————————————————————————————————————————————————————————————
-// Reclamo de perfiles con código del equipo.
-//
-// Antes cualquier visitante podía "apropiarse" de un perfil que aún no
-// tuviera contraseña desde el onboarding. Ahora las reglas de Firestore ya
-// no permiten el reclamo directo: pasa por aquí, donde se exige el CÓDIGO
-// DEL EQUIPO (compártelo solo en el grupo). El código vive en
-// retos/{retoId}/privado/acceso → { codigo: '...' } (ilegible para los
-// clientes; edítalo en la consola de Firebase sin redeploy). Si el
-// documento no existe, aplican estos valores por defecto:
-const CODIGOS_DEFAULT = { mixto: 'RETO2026', damas: 'DAMAS2026' };
-
-const normalizar = (s) => String(s || '').trim().toUpperCase();
-
-async function codigoDelReto(retoId) {
-  try {
-    const snap = await getFirestore().doc(`retos/${retoId}/privado/acceso`).get();
-    if (snap.exists && snap.data().codigo) return String(snap.data().codigo);
-  } catch { /* usa el default */ }
-  return CODIGOS_DEFAULT[retoId] || null;
-}
-
-/** Paso previo del onboarding: ¿el código tecleado es el del equipo? */
-exports.validarCodigoAcceso = onCall({ region: 'us-central1', maxInstances: 3 }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Abre la app para continuar.');
-  const { retoId, codigo } = req.data || {};
-  const esperado = await codigoDelReto(String(retoId || ''));
-  if (!esperado) throw new HttpsError('failed-precondition', 'Este reto no tiene código configurado.');
-  return { valido: normalizar(codigo) === normalizar(esperado) };
-});
-
 /**
- * Reclama un perfil (primera contraseña o tras un reinicio de acceso del
- * admin). Exige: código del equipo correcto, perfil libre (o ya tuyo) y que
- * el email de la cuenta recién creada sea el sintético de ESTE perfil.
+ * Reclama un perfil (primera contraseña, o tras un reinicio de acceso del
+ * admin). Las reglas de Firestore no permiten el reclamo directo: pasa por
+ * aquí, donde se valida que el perfil esté libre (o ya sea tuyo) y que el
+ * email de la cuenta recién creada sea el sintético de ESTE perfil.
  */
 exports.reclamarPerfil = onCall({ region: 'us-central1', maxInstances: 3 }, async (req) => {
   if (!req.auth?.token?.email) throw new HttpsError('unauthenticated', 'Necesitas una cuenta con contraseña.');
@@ -129,11 +100,6 @@ exports.reclamarPerfil = onCall({ region: 'us-central1', maxInstances: 3 }, asyn
   const usuarioId = String(req.data?.usuarioId || '');
   const nombre = String(req.data?.nombre || '').slice(0, 80);
   if (!retoId || !usuarioId || usuarioId.length > 80) throw new HttpsError('invalid-argument', 'Datos incompletos.');
-
-  const esperado = await codigoDelReto(retoId);
-  if (!esperado || normalizar(req.data?.codigo) !== normalizar(esperado)) {
-    throw new HttpsError('permission-denied', 'Código del equipo incorrecto.');
-  }
 
   const db = getFirestore();
   const ref = db.doc(`retos/${retoId}/usuarios/${usuarioId}`);
