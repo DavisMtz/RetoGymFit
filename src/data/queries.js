@@ -31,9 +31,27 @@ export async function obtenerUsuario(retoId, usuarioId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-// El reclamo del perfil (primera contraseña) vive en la Cloud Function
-// `reclamarPerfil`: valida que la cuenta corresponda al perfil. El cliente
-// ya no escribe ese cambio directamente.
+/**
+ * Reclama un perfil (primera contraseña, o tras un reinicio de acceso del
+ * admin). Las reglas de Firestore validan que el perfil esté libre (o ya
+ * sea tuyo) y que la cuenta corresponda al email sintético de este perfil.
+ */
+export async function reclamarPerfil(retoId, usuarioId, nombre, authUid) {
+  const ref = doc(db, 'retos', retoId, 'usuarios', usuarioId);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, { authUid, hasPassword: true, ultimoAcceso: serverTimestamp() });
+  } else {
+    await setDoc(ref, {
+      nombre: nombre || usuarioId,
+      estado: 'Activo',
+      authUid,
+      hasPassword: true,
+      creadoEn: serverTimestamp(),
+      ultimoAcceso: serverTimestamp(),
+    });
+  }
+}
 
 export async function marcarAcceso(retoId, usuarioId, authUid) {
   try {

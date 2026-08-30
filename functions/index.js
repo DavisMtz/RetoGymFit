@@ -9,9 +9,9 @@
  *   - Una persona es redirigida al instante a la pantalla de la publicación
  *     en la app (#/post/{retoId}/{postId}).
  */
-const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onRequest } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 
 initializeApp();
 
@@ -85,52 +85,4 @@ exports.ogpost = onRequest({ region: 'us-central1', memory: '256MiB', maxInstanc
 
   res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
   res.status(post ? 200 : 404).send(html);
-});
-
-// ————————————————————————————————————————————————————————————————
-/**
- * Reclama un perfil (primera contraseña, o tras un reinicio de acceso del
- * admin). Las reglas de Firestore no permiten el reclamo directo: pasa por
- * aquí, donde se valida que el perfil esté libre (o ya sea tuyo) y que el
- * email de la cuenta recién creada sea el sintético de ESTE perfil.
- */
-exports.reclamarPerfil = onCall({ region: 'us-central1', maxInstances: 3 }, async (req) => {
-  if (!req.auth?.token?.email) throw new HttpsError('unauthenticated', 'Necesitas una cuenta con contraseña.');
-  const retoId = String(req.data?.retoId || '');
-  const usuarioId = String(req.data?.usuarioId || '');
-  const nombre = String(req.data?.nombre || '').slice(0, 80);
-  if (!retoId || !usuarioId || usuarioId.length > 80) throw new HttpsError('invalid-argument', 'Datos incompletos.');
-
-  const db = getFirestore();
-  const ref = db.doc(`retos/${retoId}/usuarios/${usuarioId}`);
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const datos = snap.exists ? snap.data() : null;
-    if (datos?.authUid && datos.authUid !== req.auth.uid) {
-      throw new HttpsError('already-exists', 'Este perfil ya tiene cuenta en otro dispositivo.');
-    }
-    if (datos?.estado && datos.estado !== 'Activo') {
-      throw new HttpsError('permission-denied', 'Este perfil no está activo en el reto.');
-    }
-    // La cuenta debe ser el email sintético de ESTE perfil (y su generación)
-    const gen = Number(datos?.resetGen || 0);
-    const emailEsperado = `u-${usuarioId}${gen > 0 ? `-r${gen}` : ''}@${retoId}.retogymfit.app`;
-    if (String(req.auth.token.email).toLowerCase() !== emailEsperado) {
-      throw new HttpsError('permission-denied', 'La cuenta no corresponde a este perfil.');
-    }
-    if (snap.exists) {
-      tx.update(ref, { authUid: req.auth.uid, hasPassword: true, ultimoAcceso: FieldValue.serverTimestamp() });
-    } else {
-      // Participante del roster (Google Sheet) sin documento aún: se crea aquí
-      tx.set(ref, {
-        nombre: nombre || usuarioId,
-        estado: 'Activo',
-        authUid: req.auth.uid,
-        hasPassword: true,
-        creadoEn: FieldValue.serverTimestamp(),
-        ultimoAcceso: FieldValue.serverTimestamp(),
-      });
-    }
-  });
-  return { ok: true };
 });

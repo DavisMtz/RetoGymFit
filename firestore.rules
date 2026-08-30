@@ -34,20 +34,51 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow write: if esAdmin();
         allow delete: if false;
-        // El reclamo de perfiles (primera contraseña, o tras un reinicio de
-        // acceso) pasa por la Cloud Function `reclamarPerfil`: el cliente ya
-        // NO puede crear documentos de participante ni apropiarse de
-        // perfiles libres. Aquí solo el DUEÑO actual actualiza sus campos
-        // de sesión.
+
+        // El email sintético de este perfil: u-{usuarioId}[-r{gen}]@{retoId}.
+        // retogymfit.app — lo crea el cliente al hacer login/registro. No
+        // valida el número exacto de reinicio (resetGen): las reglas no
+        // convierten números a texto, así que cualquier sufijo -rN cuenta.
+        function esCuentaDeEstePerfil() {
+          return request.auth.token.email.lower()
+            .matches('^u-' + usuarioId + '(-r[0-9]+)?@' + retoId + '\\.retogymfit\\.app$');
+        }
+
+        // Reclamo de perfil (primera vez, o tras un reinicio de acceso del
+        // admin): sin código de equipo, cualquiera que abra la app puede
+        // reclamar un perfil libre sabiendo el nombre (visible en la lista
+        // de participantes) — aceptable para un reto privado por enlace.
+        allow create: if request.auth != null
+          && request.auth.token.email != null
+          && esCuentaDeEstePerfil()
+          && request.resource.data.keys().hasOnly(['nombre', 'estado', 'authUid', 'hasPassword', 'creadoEn', 'ultimoAcceso'])
+          && request.resource.data.nombre is string && request.resource.data.nombre.size() <= 80
+          && request.resource.data.estado == 'Activo'
+          && request.resource.data.authUid == request.auth.uid
+          && request.resource.data.hasPassword == true
+          && request.resource.data.creadoEn == request.time
+          && request.resource.data.ultimoAcceso == request.time;
+
         allow update: if request.auth != null
           && request.auth.token.email != null
           // solo campos de sesión + foto de perfil + token de push + marca
           // de lectura de notificaciones, nada más
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['authUid', 'hasPassword', 'ultimoAcceso', 'photoURL', 'fcmToken', 'notifVistoEn'])
-          // solo si YA eres el dueño del perfil
-          && resource.data.authUid == request.auth.uid
-          && request.resource.data.authUid == request.auth.uid
+          && (
+            // Caso normal: ya eres el dueño, actualizas tus campos de sesión.
+            (resource.data.authUid == request.auth.uid && request.resource.data.authUid == request.auth.uid)
+            ||
+            // Caso reclamo: perfil libre (sin dueño, o reiniciado por el
+            // admin) y tu cuenta es la sintética de este perfil.
+            (
+              (!('authUid' in resource.data) || resource.data.authUid == null)
+              && resource.data.estado == 'Activo'
+              && request.resource.data.authUid == request.auth.uid
+              && request.resource.data.hasPassword == true
+              && esCuentaDeEstePerfil()
+            )
+          )
           // la foto (si viene) es la URL de descarga del avatar en Storage:
           // string corto y acotado para evitar abusos
           && (!('fotoPerfil' in request.resource.data)

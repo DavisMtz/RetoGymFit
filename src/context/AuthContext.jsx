@@ -17,10 +17,9 @@ import {
   EmailAuthProvider, linkWithCredential, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, updatePassword,
 } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '../firebase';
+import { auth } from '../firebase';
 import { getReto } from '../config/retos';
-import { obtenerUsuario, marcarAcceso } from '../data/queries';
+import { obtenerUsuario, marcarAcceso, reclamarPerfil } from '../data/queries';
 
 const SESSION_KEY = 'rgf_session_v1';
 const ADMIN_EMAIL = 'admin@retogymfit.app';
@@ -94,10 +93,11 @@ export function AuthProvider({ children }) {
   }, [sesion, firebaseUser]);
 
   /**
-   * Primera vez: crear contraseña y reclamar el perfil. El reclamo lo hace
-   * la Cloud Function `reclamarPerfil` — un extraño ya no puede apropiarse
-   * de perfiles sin contraseña. Si el reclamo falla, la cuenta recién
-   * creada se deshace para no dejarla huérfana.
+   * Primera vez: crear contraseña y reclamar el perfil. Las reglas de
+   * Firestore exigen que el perfil esté libre (o ya sea tuyo) y que la
+   * cuenta recién creada corresponda al email sintético de este perfil. Si
+   * el reclamo falla, la cuenta recién creada se deshace para no dejarla
+   * huérfana.
    */
   const crearCuenta = useCallback(async (retoId, usuarioDoc, password) => {
     const email = emailSintetico(retoId, usuarioDoc.id, usuarioDoc.resetGen || 0);
@@ -105,17 +105,13 @@ export function AuthProvider({ children }) {
     let user;
     if (auth.currentUser?.isAnonymous) {
       ({ user } = await linkWithCredential(auth.currentUser, cred));
-      // refrescar el token para que el backend vea el email ya vinculado
+      // refrescar el token para que las reglas vean el email ya vinculado
       await user.getIdToken(true);
     } else {
       ({ user } = await createUserWithEmailAndPassword(auth, email, password));
     }
     try {
-      await httpsCallable(functions, 'reclamarPerfil')({
-        retoId,
-        usuarioId: usuarioDoc.id,
-        nombre: usuarioDoc.nombre,
-      });
+      await reclamarPerfil(retoId, usuarioDoc.id, usuarioDoc.nombre, user.uid);
     } catch (err) {
       try { await user.delete(); } catch { await signOut(auth); }
       throw err;
