@@ -168,16 +168,31 @@ function filaRegistro_(r) {
 // ════════════════════════════════════════════════════════════════
 
 function configurarEspejo() {
-  // 1) Importar/espejar todo ahora
-  var resumen = sincronizarTodo();
-  // 2) Instalar triggers (borra los previos para no duplicar)
+  // 1) Instalar triggers PRIMERO (borra los previos para no duplicar). Si el
+  //    paso 2 truena (p. ej. cuota de Firestore agotada ese día), los
+  //    triggers viejos (cada 15 min) ya quedaron fuera y el diario ya quedó
+  //    puesto — no se queda reintentando cada 15 min por error.
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   for (var reto in HOJAS) {
     ScriptApp.newTrigger('onEditEspejo').forSpreadsheet(HOJAS[reto]).onEdit().create();
   }
   ScriptApp.newTrigger('sincronizarTodo').timeBased().everyDays(1).atHour(4).create();
-  Logger.log('✅ Espejo configurado. ' + resumen);
   Logger.log('Triggers: onEdit en ambas hojas + resync diario (4am).');
+
+  // 2) Importar/espejar todo ahora. Si la cuota de escrituras de Firestore ya
+  //    se agotó hoy (RESOURCE_EXHAUSTED), no lo tomes como error fatal: los
+  //    triggers ya quedaron bien, y el resync de las 4am lo intentará solo
+  //    mañana con cuota fresca. Puedes volver a ejecutar sincronizarTodo()
+  //    a mano cuando la cuota se reponga.
+  var resumen;
+  try {
+    resumen = sincronizarTodo();
+    Logger.log('✅ Espejo configurado y sincronizado. ' + resumen);
+  } catch (err) {
+    resumen = 'Triggers instalados, pero la sincronización inicial falló: ' + err
+      + ' — probablemente cuota de Firestore agotada hoy. El resync de las 4am lo reintentará solo.';
+    Logger.log('⚠️ ' + resumen);
+  }
   return resumen;
 }
 
