@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentSingleTabManager } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 // Config del proyecto retogymfit. La config web de Firebase no es secreta:
 // la seguridad real vive en las reglas de Firestore (firestore.rules).
@@ -23,5 +22,3 @@ setPersistence(auth, browserLocalPersistence);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() }),
 });
-
-export const storage = getStorage(app);

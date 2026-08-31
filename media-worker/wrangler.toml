@@ -1,0 +1,12 @@
+name = "retogymfit-media"
+main = "src/index.js"
+compatibility_date = "2026-08-28"
+
+routes = [
+  { pattern = "media-retogymfit.logidma.com", custom_domain = true }
+]
+
+[vars]
+CLOUDINARY_CLOUD_NAME = "cdxybdht"
+FIREBASE_API_KEY = "AIzaSyDQwFU9hcM1iJbRJW5zArdhvlV-vqaRIQE"
+APP_ORIGIN = "https://retogymfit.web.app"

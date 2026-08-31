@@ -1,10 +1,11 @@
 /**
  * Fotos del feed social: se comprimen en el cliente (máx. 1080 px por lado,
- * JPEG progresivamente más ligero) y se suben a Storage en feed/{uid}/{ts}.jpg.
- * Devuelve la URL de descarga para guardarla en el documento del post.
+ * JPEG progresivamente más ligero) y se suben a Cloudinary en
+ * feed/{uid}/{ts} (vía media-worker/). Devuelve la URL pública para
+ * guardarla en el documento del post.
  */
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, storage } from '../firebase';
+import { auth } from '../firebase';
+import { subirImagen } from './cloudinary';
 
 const LADO_MAX = 1080;
 const OBJETIVO_BYTES = 350000; // ~350 KB por foto
@@ -50,7 +51,5 @@ export async function comprimirFotoFeed(file) {
 export async function subirFotoFeed(file) {
   if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Sin sesión');
   const blob = await comprimirFotoFeed(file);
-  const r = ref(storage, `feed/${auth.currentUser.uid}/${Date.now()}.jpg`);
-  await uploadBytes(r, blob, { contentType: 'image/jpeg', cacheControl: 'public,max-age=86400' });
-  return getDownloadURL(r);
+  return subirImagen('/firmar/feed', blob);
 }

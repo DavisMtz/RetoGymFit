@@ -1,0 +1,13 @@
+{
+  "name": "retogymfit-media-worker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Firma subidas y borrados de Cloudinary sin exponer el secreto al cliente",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  }
+}

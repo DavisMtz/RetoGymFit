@@ -1,11 +1,11 @@
 /**
  * Fotos de perfil: redimensiona la imagen en el cliente (para que pese poco),
- * la sube a Cloud Storage en avatars/{uid} y guarda la URL en el documento
- * del participante (usuarios/{id}.photoURL).
+ * la sube a Cloudinary (avatars/{uid}, vía media-worker/) y guarda la URL en
+ * el documento del participante (usuarios/{id}.photoURL).
  */
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
-import { auth, db, storage } from '../firebase';
+import { auth, db } from '../firebase';
+import { subirImagen, borrarImagenAvatar } from './cloudinary';
 
 const MAX_LADO = 320; // px — suficiente para avatares nítidos y ligeros
 
@@ -35,20 +35,14 @@ function procesarImagen(file) {
 export async function subirAvatar(retoId, usuarioId, file) {
   if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Sin sesión');
   const blob = await procesarImagen(file);
-  const avatarRef = ref(storage, `avatars/${auth.currentUser.uid}`);
-  await uploadBytes(avatarRef, blob, { contentType: 'image/jpeg' });
-  const url = await getDownloadURL(avatarRef);
+  const url = await subirImagen('/firmar/avatar', blob);
   await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { photoURL: url });
   return url;
 }
 
-/** Quita el avatar: borra el archivo en Storage y limpia photoURL. */
+/** Quita el avatar: borra el archivo en Cloudinary y limpia photoURL. */
 export async function borrarAvatar(retoId, usuarioId) {
   if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Sin sesión');
-  try {
-    await deleteObject(ref(storage, `avatars/${auth.currentUser.uid}`));
-  } catch (err) {
-    if (err?.code !== 'storage/object-not-found') throw err;
-  }
+  await borrarImagenAvatar();
   await updateDoc(doc(db, 'retos', retoId, 'usuarios', usuarioId), { photoURL: deleteField() });
 }
