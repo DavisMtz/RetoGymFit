@@ -1,4 +1,11 @@
 /**
+ * ⚠️ CÓDIGO RETIRADO — ya no se despliega.
+ *
+ * Lo reemplazó og-worker/ (Cloudflare) cuando el proyecto salió del plan
+ * Blaze y las Cloud Functions quedaron congeladas. Esta función devolvía 503
+ * en producción y rompía los enlaces /p/ ya compartidos; ahora firebase.json
+ * redirige /p/:retoId/:postId al Worker. Se conserva solo como referencia.
+ *
  * ogpost — vista previa de publicaciones compartidas.
  *
  * Los bots de WhatsApp/Facebook/Twitter no ejecutan JavaScript ni ven el
