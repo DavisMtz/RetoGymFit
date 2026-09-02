@@ -1,0 +1,200 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMA PATRIO — septiembre mexicano
+   Se activa con html[data-patrio='on'] (ver src/lib/patrio.js).
+
+   El criterio: la app NO se vuelve una bandera. Conserva su base oscura y
+   su tipografía; lo que cambia es el acento (lima → verde), los reflejos
+   del fondo y una capa de artesanía —papel picado y franjas de sarape—.
+   Un verde/blanco/rojo a pantalla completa se vería de kermés y arruinaría
+   la legibilidad que ya tiene la app.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+html[data-patrio='on'] {
+  /* Colores fieles de la bandera: SOLO para rellenos decorativos. */
+  --pt-verde: #006847;
+  --pt-rojo: #ce1126;
+  --pt-blanco: #ffffff;
+  /* Versiones aclaradas: estas sí pisan texto y bordes sobre el fondo #0a0a0a. */
+  --pt-verde-vivo: #00b45e;
+  --pt-rojo-vivo: #ff4d5a;
+  --pt-oro: #ffd84d;
+  --pt-rosa: #ff5fa2;
+
+  /* El acento de la app pasa de lima a verde mexicano. */
+  --acc: var(--pt-verde-vivo);
+  --acc-soft: #00b45e22;
+  --acc-glow: #00b45e44;
+  --on-acc: #04150c;
+}
+
+/* Fondo: el reflejo lima se vuelve verde arriba y rojo abajo — la bandera
+   sugerida, no dibujada. */
+html[data-patrio='on'] body::before {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 180, 94, 0.09), transparent 62%),
+    radial-gradient(ellipse 70% 45% at 50% 118%, rgba(206, 17, 38, 0.08), transparent 62%);
+}
+
+/* ——— Papel picado ———————————————————————————————————————————————
+   Guirnalda fija bajo el borde superior. Cada banderín es un <svg> con su
+   recorte; el vaivén lo hace GSAP (src/lib/anim.js → mecerPapelPicado). */
+
+.papel-picado {
+  position: fixed;
+  /* Cuelga POR DEBAJO de la muesca, no detrás de ella. */
+  top: env(safe-area-inset-top, 0px); left: 0; right: 0;
+  height: 92px;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* La cuerda de la que cuelgan */
+.papel-picado::before {
+  content: '';
+  position: absolute;
+  top: 7px; left: -2%; right: -2%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22) 12%, rgba(255, 255, 255, 0.22) 88%, transparent);
+  border-radius: 2px;
+}
+
+.pp-fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 0 0;
+  width: 100%;
+}
+
+.pp-banderin {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 76px;
+  transform-origin: 50% 0;   /* cuelga del clavo, se mece desde arriba */
+  will-change: transform;
+  opacity: 0.92;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35));
+}
+
+/* En pantallas chicas caben menos banderines sin que se vean apretados */
+@media (max-width: 420px) {
+  .papel-picado { height: 76px; }
+  .pp-banderin { height: 62px; }
+  .pp-banderin:nth-child(n + 8) { display: none; }
+}
+
+/* Deja aire para que la guirnalda no tape la cabecera.
+   Se suma al safe-area en vez de reemplazarlo: el padding original de
+   .app-shell es max(20px, env(safe-area-inset-top)), y escribir un valor
+   plano dejaba el contenido bajo la muesca en los iPhone con notch. */
+html[data-patrio='on'] .app-shell {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 78px);
+}
+
+@media (max-width: 420px) {
+  html[data-patrio='on'] .app-shell {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 64px);
+  }
+}
+
+/* ——— Franja de sarape ———————————————————————————————————————————
+   Un hilo de color en el borde superior de las tarjetas: el guiño más
+   discreto posible al textil de Saltillo. */
+
+html[data-patrio='on'] .card {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-patrio='on'] .card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    var(--pt-verde-vivo) 0%, var(--pt-verde-vivo) 33%,
+    var(--pt-blanco) 33%, var(--pt-blanco) 66%,
+    var(--pt-rojo-vivo) 66%, var(--pt-rojo-vivo) 100%);
+  opacity: 0.55;
+}
+
+/* La tarjeta del bote se lleva el sarape completo, que es la más festiva */
+html[data-patrio='on'] .jackpot {
+  background: linear-gradient(135deg, #00704a 0%, #005c3d 55%, #7d0f1e 100%);
+}
+
+html[data-patrio='on'] .jackpot::before {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent, transparent 10px,
+    rgba(255, 216, 77, 0.10) 10px, rgba(255, 216, 77, 0.10) 12px,
+    transparent 12px, transparent 22px,
+    rgba(255, 255, 255, 0.07) 22px, rgba(255, 255, 255, 0.07) 24px
+  );
+}
+
+/* ——— Modal de bienvenida ——————————————————————————————————————— */
+
+.patrio-modal .modal { text-align: center; }
+
+.patrio-emblema {
+  width: 96px; height: 96px;
+  margin: 0 auto 6px;
+  display: block;
+}
+
+.patrio-titulo {
+  font-family: var(--display);
+  font-size: 25px; font-weight: 800;
+  line-height: 1.15;
+  margin: 4px 0 0;
+  background: linear-gradient(100deg, var(--pt-verde-vivo) 0%, var(--pt-blanco) 50%, var(--pt-rojo-vivo) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+
+.patrio-nota {
+  font-size: 12.5px;
+  color: var(--text-low);
+  margin-top: 14px;
+  line-height: 1.6;
+}
+
+.patrio-nota b { color: var(--text-mid); font-weight: 600; }
+
+/* Cohetes del Grito: el lienzo se pone encima de todo pero no estorba */
+.patrio-cohetes {
+  position: fixed; inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ——— Tema claro ————————————————————————————————————————————————
+   Sobre fondo claro, los colores fieles ya contrastan: se usan tal cual. */
+
+html[data-tema='claro'][data-patrio='on'] {
+  --acc: var(--pt-verde);
+  --acc-soft: #00684716;
+  --acc-glow: #00684733;
+  --on-acc: #ffffff;
+}
+
+html[data-tema='claro'][data-patrio='on'] body::before {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 104, 71, 0.10), transparent 62%),
+    radial-gradient(ellipse 70% 45% at 50% 118%, rgba(206, 17, 38, 0.08), transparent 62%);
+}
+
+html[data-tema='claro'] .papel-picado::before {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.18) 12%, rgba(0, 0, 0, 0.18) 88%, transparent);
+}
+
+/* ——— Accesibilidad ———————————————————————————————————————————————
+   Quien pidió menos movimiento conserva el tema, pero sin vaivén ni cohetes.
+   El resto de la app ya respeta esto en JS (src/lib/anim.js). */
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-banderin { animation: none !important; transform: none !important; }
+  .patrio-cohetes { display: none; }
+}

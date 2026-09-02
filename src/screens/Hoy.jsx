@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
+import { coloresCelebracion } from '../lib/patrio';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots, getInitials, useCountUp } from '../components/ui';
 import {
@@ -249,7 +250,9 @@ export default function Hoy() {
   const [modalWA, setModalWA] = useState(null); // { url }
 
   const actividad = reto.actividades.find((a) => a.id === tipo);
-  const colores = ['#d4ff00', '#ffffff', '#4ade80', ...(reto.acentoSecundario ? [reto.acentoSecundario] : [])];
+  const colores = coloresCelebracion(
+    ['#d4ff00', '#ffffff', '#4ade80', ...(reto.acentoSecundario ? [reto.acentoSecundario] : [])],
+  );
 
   const cargar = useCallback(async () => {
     const [regHoy, historial, ranking, entrenaron, activos] = await Promise.all([

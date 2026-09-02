@@ -12,6 +12,8 @@ import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
 import { obtenerTema, guardarTema } from '../lib/tema';
 import { obtenerCorreo, guardarCorreo, correoValido } from '../lib/recuperacion';
+import { prefiereePatrio, guardarPreferencia } from '../lib/patrio';
+import { esMesPatrio } from '../config/patrio';
 import { silenciarAvisoCorreo } from '../components/CorreoBanner';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
@@ -43,6 +45,18 @@ export default function Perfil() {
   const [correoInput, setCorreoInput] = useState('');
   const [errorCorreo, setErrorCorreo] = useState('');
   const [guardandoCorreo, setGuardandoCorreo] = useState(false);
+  const [patrio, setPatrio] = useState(prefiereePatrio);
+
+  // Solo se ofrece en septiembre: fuera del mes patrio la fila no aplica.
+  const enMesPatrio = esMesPatrio(hoyMX());
+
+  function togglePatrio() {
+    vibrate(15);
+    const nuevo = !patrio;
+    setPatrio(nuevo);
+    guardarPreferencia(nuevo);
+    toast(nuevo ? 'Tema patrio activado 🇲🇽' : 'Tema patrio desactivado');
+  }
 
   function toggleTema() {
     vibrate(15);
@@ -291,6 +305,20 @@ export default function Perfil() {
             <span className={`honor-switch ${pushActivo ? 'push-on' : ''}`} style={{ pointerEvents: 'none' }} />
           </button>
         )}
+        {enMesPatrio && (
+          <button className="pref-row" type="button" onClick={togglePatrio}>
+            <span className="pr-icon">{patrio ? '🇲🇽' : '🎨'}</span>
+            <span className="pr-text">
+              <span className="pr-title">Tema patrio</span>
+              <span className="pr-sub">
+                {patrio
+                  ? 'Septiembre en verde, blanco y rojo · toca para quitarlo'
+                  : 'Desactivado · toca para volver a la fiesta'}
+              </span>
+            </span>
+          </button>
+        )}
+
         <button
           className="pref-row"
           type="button"

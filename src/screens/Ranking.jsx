@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { coloresCelebracion } from '../lib/patrio';
 import { useAuth } from '../context/AuthContext';
 import {
   useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip, RankSkeleton,
@@ -154,7 +155,7 @@ export default function Ranking() {
           confetti({
             particleCount: 30, spread: 70, startVelocity: 22, gravity: 0.9,
             origin: { x: (r.left + r.width / 2) / window.innerWidth, y: (r.top + r.height / 2) / window.innerHeight },
-            colors: ['#d4ff00', '#4ade80', '#ffd84d', '#ffffff'],
+            colors: coloresCelebracion(['#d4ff00', '#4ade80', '#ffd84d', '#ffffff']),
           });
         }}
       >

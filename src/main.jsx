@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/fonts.css';
 import './styles/global.css';
+import './styles/patrio.css';
 import { obtenerTema, aplicarTema } from './lib/tema';
 
 // Aplica el tema guardado ANTES del primer render para evitar el destello

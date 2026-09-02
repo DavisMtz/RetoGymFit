@@ -18,6 +18,8 @@ import {
 } from '../data/queries';
 import { sincronizarRegistroAdmin, borrarRegistroSheet } from '../lib/sheets';
 import { hoyMX } from '../lib/dates';
+import { patrioGlobalActivo, fijarPatrioGlobal } from '../lib/patrio';
+import { esMesPatrio } from '../config/patrio';
 
 const ESTATUS = ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO'];
 
@@ -127,6 +129,8 @@ export default function Admin() {
   const [modalSalir, setModalSalir] = useState(false);
   const [pago, setPago] = useState({ fecha: hoyMX(), usuario: '', monto: '', notas: '' });
   const [enviando, setEnviando] = useState(false);
+  const [patrioGlobal, setPatrioGlobal] = useState(true);   // interruptor del tema patrio
+  const [patrioCargando, setPatrioCargando] = useState(false);
 
   const cargar = useCallback(async () => {
     setUsuarios(null); setPagos(null); setAbierto(null); setHistorial({});
@@ -158,6 +162,30 @@ export default function Admin() {
       toast('No pude cargar el historial', true);
     }
   }, [retoId, toast]);
+
+  // El tema patrio se puede apagar para TODO el reto desde aquí. Vive en el
+  // documento retos/{retoId}, que ya es legible por cualquier autenticado y
+  // escribible solo por el admin: no hizo falta tocar firestore.rules.
+  useEffect(() => {
+    let activo = true;
+    patrioGlobalActivo(retoId).then((v) => { if (activo) setPatrioGlobal(v); });
+    return () => { activo = false; };
+  }, [retoId]);
+
+  async function togglePatrioGlobal() {
+    if (patrioCargando) return;
+    setPatrioCargando(true);
+    const nuevo = !patrioGlobal;
+    try {
+      await fijarPatrioGlobal(retoId, nuevo);
+      setPatrioGlobal(nuevo);
+      toast(nuevo ? 'Tema patrio activado para todo el reto' : 'Tema patrio desactivado para todo el reto');
+    } catch {
+      toast('No se pudo cambiar. Revisa tu conexión.');
+    } finally {
+      setPatrioCargando(false);
+    }
+  }
 
   function toggleUsuario(u) {
     vibrate(12);
@@ -329,6 +357,25 @@ export default function Admin() {
           <div className="st-label">Bote<br />acumulado</div>
         </div>
       </div>
+
+      {esMesPatrio(hoyMX()) && (
+        <section className="card">
+          <div className="card-head"><h2 className="card-title">Mes patrio</h2></div>
+          <button className="pref-row" type="button" onClick={togglePatrioGlobal} disabled={patrioCargando}>
+            <span className="pr-icon">{patrioGlobal ? '🇲🇽' : '🚫'}</span>
+            <span className="pr-text">
+              <span className="pr-title">Tema patrio para todo el reto</span>
+              <span className="pr-sub">
+                {patrioCargando
+                  ? 'Guardando…'
+                  : patrioGlobal
+                    ? `Encendido en ${reto.nombre} · toca para apagarlo a todos`
+                    : `Apagado en ${reto.nombre} · nadie lo ve, aunque lo activen en su perfil`}
+              </span>
+            </span>
+          </button>
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head"><h2 className="card-title">Participantes</h2></div>
