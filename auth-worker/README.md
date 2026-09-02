@@ -103,6 +103,27 @@ npm run deploy                        # crea auth-retogymfit.logidma.com
 firebase deploy --only firestore:rules
 ```
 
+## Estado del despliegue
+
+| Pieza | Estado |
+|---|---|
+| Cuenta `auth-worker@retogymfit.app` | ✅ creada (uid `p9RtWGZsFmQ4WJU7gjlyowPKAUN2`) |
+| Secrets `BREVO_API_KEY`, `WORKER_REFRESH_TOKEN` | ✅ cargados |
+| KV + D1 + esquema | ✅ creados |
+| Worker en `auth-retogymfit.logidma.com` | ✅ publicado |
+| `firestore.rules` | ⛔ **pendiente** — requiere `firebase login` |
+
+Hasta que se publiquen las reglas funcionan `/correo/*` y
+`/recuperar/solicitar` (llega el código al correo), pero
+`/recuperar/verificar` responde 502: el Worker todavía no tiene permiso para
+liberar el perfil.
+
+## Pruebas
+
+```bash
+npm test   # esDuenoDelPerfil y esUsuarioValido, incluidos casos de suplantación
+```
+
 ## Qué sigue dependiendo de Firebase
 
 Solo el paso final: `authUid=null, hasPassword=false, resetGen+1` se escribe en

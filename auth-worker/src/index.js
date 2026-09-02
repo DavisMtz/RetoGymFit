@@ -82,8 +82,10 @@ function igualSeguro(a, b) {
 }
 
 const esRetoValido = (r) => Object.prototype.hasOwnProperty.call(NOMBRES_RETO, r);
-// Mismo criterio que emailSintetico() en el cliente: ids de perfil acotados.
-const esUsuarioValido = (u) => typeof u === 'string' && /^[\w .\-áéíóúüñÁÉÍÓÚÜÑ]{1,80}$/.test(u);
+// El id de un participante SIEMPRE es un slug: lo generan slugNombre() en
+// src/lib/sheets.js y slug_() en apps-script/SheetsBridge.gs, ambos idénticos
+// (minúsculas, sin acentos, no-alfanumérico → guion). Nada más es válido.
+const esUsuarioValido = (u) => typeof u === 'string' && /^[a-z0-9-]{1,80}$/.test(u);
 
 /* ── Identidad del participante (para registrar su propio correo) ───── */
 
