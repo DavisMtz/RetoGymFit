@@ -1,34 +1,49 @@
 /**
  * Correo de recuperación y restablecimiento de contraseña.
  *
- * El correo del participante NO vive en su documento de usuario: ese lo puede
- * leer cualquier cuenta autenticada (incluso anónima), así que estaría a la
- * vista de todo el reto. Vive en `retos/{retoId}/correos/{usuarioId}`, que
- * según firestore.rules solo leen su dueño y el Worker de recuperación.
+ * El correo NO se guarda en Firestore. Vive en Cloudflare D1, detrás del
+ * Worker (auth-worker/), por dos razones:
+ *   1. En Firestore, usuarios/{id} lo puede leer cualquier cuenta autenticada
+ *      —incluso anónima—, así que un correo ahí quedaría a la vista de todo
+ *      el reto. En D1 solo lo lee el Worker.
+ *   2. El proyecto se está moviendo de Firebase a Cloudflare.
  *
- * Lo escribe el propio dueño desde Perfil (las reglas verifican que el perfil
- * ya sea suyo). El Worker (auth-worker/) solo lo lee, y únicamente para
- * mandar el código cuando alguien olvidó su contraseña.
+ * Todas las operaciones sobre el correo van firmadas con el ID token de
+ * Firebase Auth: el email sintético de la cuenta demuestra de qué perfil
+ * eres dueño, así nadie registra un correo en cuenta ajena.
  */
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { auth } from '../firebase';
 
 const AUTH_WORKER = 'https://auth-retogymfit.logidma.com';
 
-/** Validación básica; la definitiva la hacen las reglas y el propio Brevo. */
+/** Validación básica; la definitiva la hacen el Worker y el propio Brevo. */
 export function correoValido(email) {
   return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(String(email || '').trim());
 }
 
-const refCorreo = (retoId, usuarioId) => doc(db, 'retos', retoId, 'correos', usuarioId);
+async function pedir(ruta, cuerpo, conToken = false) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (conToken) {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('sin_sesion');
+    headers.Authorization = `Bearer ${idToken}`;
+  }
+  const res = await fetch(`${AUTH_WORKER}${ruta}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(cuerpo),
+  });
+  const datos = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, ...datos };
+}
 
 /** El correo registrado del participante actual, o null si no tiene. */
 export async function obtenerCorreo(retoId, usuarioId) {
   try {
-    const snap = await getDoc(refCorreo(retoId, usuarioId));
-    return snap.exists() ? snap.data().email : null;
+    const r = await pedir('/correo/leer', { retoId, usuarioId }, true);
+    return r.ok ? r.correo || null : null;
   } catch {
-    // Sin permiso (no es su perfil) o sin red: para la app equivale a no tener.
+    // Sin sesión o sin red: para la app equivale a no tener correo.
     return null;
   }
 }
@@ -37,31 +52,20 @@ export async function obtenerCorreo(retoId, usuarioId) {
 export async function guardarCorreo(retoId, usuarioId, email) {
   const limpio = String(email).trim().toLowerCase();
   if (!correoValido(limpio)) throw new Error('correo_invalido');
-  await setDoc(refCorreo(retoId, usuarioId), {
-    email: limpio,
-    authUid: auth.currentUser.uid,
-    actualizadoEn: serverTimestamp(),
-  });
-  return limpio;
+  const r = await pedir('/correo/guardar', { retoId, usuarioId, email: limpio }, true);
+  if (!r.ok) throw new Error(r.error || 'no_se_pudo_guardar');
+  return r.correo;
 }
 
 /** Quita el correo registrado. */
 export async function borrarCorreo(retoId, usuarioId) {
-  await deleteDoc(refCorreo(retoId, usuarioId));
-}
-
-async function pedir(ruta, cuerpo) {
-  const res = await fetch(`${AUTH_WORKER}${ruta}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(cuerpo),
-  });
-  const datos = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, ...datos };
+  const r = await pedir('/correo/borrar', { retoId, usuarioId }, true);
+  if (!r.ok) throw new Error(r.error || 'no_se_pudo_borrar');
 }
 
 /**
- * Pide el código de recuperación.
+ * Pide el código de recuperación. Sin token: quien lo pide, por definición,
+ * no puede entrar a su cuenta.
  * → { ok:true, tieneCorreo:true, correo:'ju***@gmail.com', expiraEn }
  * → { ok:true, tieneCorreo:false }  (no registró correo: que le escriba al admin)
  */

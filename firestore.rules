@@ -114,41 +114,6 @@ service cloud.firestore {
           && request.resource.data.hasPassword == false;
       }
 
-      // ——— Correo real del participante, solo para recuperar la contraseña.
-      // Vive fuera de usuarios/{id} a propósito: ese documento lo puede leer
-      // CUALQUIER cuenta autenticada (incluso anónima), así que un correo ahí
-      // quedaría a la vista de todo el reto. Aquí lo leen únicamente su dueño
-      // y el Worker de recuperación.
-      match /correos/{usuarioId} {
-        allow read: if esWorkerAuth() || esAdmin()
-          || (request.auth != null && resource.data.authUid == request.auth.uid);
-
-        // Lo escribe el propio dueño desde Perfil: las reglas exigen que el
-        // perfil ya sea suyo, así nadie registra un correo en cuenta ajena.
-        allow create: if request.auth != null
-          && request.resource.data.keys().hasOnly(['email', 'authUid', 'actualizadoEn'])
-          && request.resource.data.authUid == request.auth.uid
-          && get(/databases/$(database)/documents/retos/$(retoId)/usuarios/$(usuarioId))
-               .data.authUid == request.auth.uid
-          && request.resource.data.email is string
-          && request.resource.data.email.size() <= 254
-          && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$')
-          && request.resource.data.actualizadoEn == request.time;
-
-        allow update: if request.auth != null
-          && resource.data.authUid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['email', 'authUid', 'actualizadoEn'])
-          && request.resource.data.authUid == request.auth.uid
-          && request.resource.data.email is string
-          && request.resource.data.email.size() <= 254
-          && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]{2,}$')
-          && request.resource.data.actualizadoEn == request.time;
-
-        // Quitar el correo: solo su dueño (o el admin al depurar el padrón).
-        allow delete: if esAdmin()
-          || (request.auth != null && resource.data.authUid == request.auth.uid);
-      }
-
       match /registros/{registroId} {
         allow read: if request.auth != null;
         allow write: if esAdmin();

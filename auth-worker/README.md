@@ -15,12 +15,13 @@ tiene a dónde llegar, así que hay que traer un correo real por fuera.
 
 ```
 Perfil → "Correo de recuperación"
-   └─ el cliente escribe retos/{retoId}/correos/{usuarioId}
-      (firestore.rules exige que el perfil ya sea suyo)
+   └─ POST /correo/guardar  (Bearer idToken de Firebase Auth)
+        · el email sintético de la cuenta demuestra de qué perfil eres dueño
+        · se guarda en D1, no en Firestore
 
 Onboarding → "¿Olvidaste tu contraseña?"
    ├─ POST /recuperar/solicitar  {retoId, usuarioId}
-   │    · lee el correo registrado con la identidad del Worker
+   │    · lee el correo registrado en D1
    │    · genera un código de 6 dígitos (crypto.getRandomValues)
    │    · guarda SOLO sha256(retoId:usuarioId:codigo) en KV, TTL 5 min
    │    · lo envía por Brevo y responde el correo enmascarado (ju***@gmail.com)
@@ -47,7 +48,8 @@ servicio ni plan Blaze.
 | Intentos | 5 por código; al sexto se quema |
 | Comparación | tiempo constante, no filtra por dónde difiere |
 | Un código válido | se borra al usarse |
-| Correos | en `correos/{usuarioId}`, no en `usuarios/{id}` — ese lo lee cualquier cuenta autenticada, incluso anónima |
+| Correos | en **D1**, no en Firestore — allí `usuarios/{id}` lo lee cualquier cuenta autenticada, incluso anónima |
+| Dueño del correo | lo prueba el email sintético del propio ID token, sin leer Firestore |
 | Identidad del Worker | cuenta propia, NO admin: las reglas solo le dejan leer un correo y liberar ese perfil |
 
 Concesión conocida: la respuesta distingue "no tiene correo registrado" de
@@ -73,10 +75,18 @@ Guarda el `refreshToken` de la respuesta: es el secret `WORKER_REFRESH_TOKEN`.
 (La contraseña no se vuelve a usar; guárdala en tu gestor por si hay que
 regenerar el token.)
 
-### 2. KV
+### 2. Almacenamiento (ya creado)
 
-Ya creado: namespace `retogymfit-codigos-recuperacion`, id
-`3920970229c0448c921ec40bcf919a1d`, referenciado en `wrangler.toml`.
+| Recurso | Para | Id |
+|---|---|---|
+| KV `retogymfit-codigos-recuperacion` | hash del código, TTL 5 min | `3920970229c0448c921ec40bcf919a1d` |
+| D1 `retogymfit` | correos registrados | `a3b513c3-100a-4ca5-8056-72f3f7a437fe` |
+
+El esquema (`schema/001_correos.sql`) ya está aplicado. Para recrearlo:
+
+```bash
+npx wrangler d1 execute retogymfit --remote --file schema/001_correos.sql
+```
 
 ### 3. Secrets
 
@@ -92,6 +102,13 @@ npm run secret:worker-token   # WORKER_REFRESH_TOKEN (paso 1)
 npm run deploy                        # crea auth-retogymfit.logidma.com
 firebase deploy --only firestore:rules
 ```
+
+## Qué sigue dependiendo de Firebase
+
+Solo el paso final: `authUid=null, hasPassword=false, resetGen+1` se escribe en
+Firestore, porque de ahí leen las reglas que permiten reclamar el perfil y ahí
+vive la identidad (Firebase Auth). No se puede mover sin migrar la
+autenticación entera. Lo demás —correos, códigos, envío— ya es todo Cloudflare.
 
 ## Remitente
 

@@ -5,9 +5,15 @@
  * uno se mapea a un email sintético `u-{usuarioId}[-r{gen}]@{retoId}.
  * retogymfit.app` que no existe como buzón, así que el correo de
  * restablecimiento de Firebase no tiene a dónde llegar. Quien quiera
- * recuperar su acceso registra antes su correo real en Perfil (el cliente
- * lo escribe en retos/{retoId}/correos/{usuarioId}, y las reglas exigen que
- * sea el dueño del perfil).
+ * recuperar su acceso registra antes su correo real desde Perfil.
+ *
+ * Dónde vive cada cosa (el proyecto se está moviendo a Cloudflare):
+ *   · Correos registrados → D1 (`retogymfit.correos`). Fuera de Firestore a
+ *     propósito: allí usuarios/{id} lo lee cualquier cuenta autenticada,
+ *     incluso anónima, y el correo quedaría a la vista de todo el reto.
+ *   · Códigos de un solo uso → KV, solo el hash y con TTL nativo.
+ *   · Padrón (quién participa, si está Activo) y contraseñas → todavía en
+ *     Firebase; por eso el paso final sigue tocando Firestore.
  *
  * Flujo:
  *   1. POST /recuperar/solicitar  { retoId, usuarioId }
@@ -40,7 +46,7 @@ function cors(origen) {
   return {
     'Access-Control-Allow-Origin': origen,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
     'Content-Type': 'application/json',
   };
 }
@@ -78,6 +84,77 @@ function igualSeguro(a, b) {
 const esRetoValido = (r) => Object.prototype.hasOwnProperty.call(NOMBRES_RETO, r);
 // Mismo criterio que emailSintetico() en el cliente: ids de perfil acotados.
 const esUsuarioValido = (u) => typeof u === 'string' && /^[\w .\-áéíóúüñÁÉÍÓÚÜÑ]{1,80}$/.test(u);
+
+/* ── Identidad del participante (para registrar su propio correo) ───── */
+
+/**
+ * Verifica el ID token de Firebase Auth y devuelve { uid, email }.
+ * Mismo patrón que media-worker: no hace falta Admin SDK, basta con
+ * preguntarle a Identity Toolkit con la API key pública.
+ */
+async function usuarioDesdeToken(env, request) {
+  const auth = request.headers.get('Authorization') || '';
+  const idToken = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!idToken) return null;
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    },
+  );
+  if (!res.ok) return null;
+  const user = (await res.json()).users?.[0];
+  if (!user?.email) return null; // cuenta anónima: aún no reclamó perfil
+  return { uid: user.localId, email: String(user.email).toLowerCase() };
+}
+
+// Mismo slug que emailSintetico() en src/context/AuthContext.jsx.
+const slugNombre = (usuarioId) => usuarioId.toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+/**
+ * ¿El token corresponde al perfil {retoId, usuarioId}? Lo demuestra el propio
+ * email sintético de la cuenta, sin necesidad de leer Firestore. No fijamos
+ * el número de reinicio (-rN): cualquiera de las generaciones es su dueño.
+ */
+function esDuenoDelPerfil(emailToken, retoId, usuarioId) {
+  const patron = new RegExp(
+    `^u-${slugNombre(usuarioId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(-r\\d+)?@${retoId}\\.retogymfit\\.app$`,
+  );
+  return patron.test(emailToken);
+}
+
+/* ── Correos registrados (D1) ───────────────────────────────────────── */
+
+async function leerCorreo(env, retoId, usuarioId) {
+  const fila = await env.DB
+    .prepare('SELECT email FROM correos WHERE reto_id = ? AND usuario_id = ?')
+    .bind(retoId, usuarioId)
+    .first();
+  return fila?.email || null;
+}
+
+async function escribirCorreo(env, retoId, usuarioId, email, authUid) {
+  await env.DB
+    .prepare(`INSERT INTO correos (reto_id, usuario_id, email, auth_uid, actualizado_en)
+              VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(reto_id, usuario_id)
+              DO UPDATE SET email = excluded.email,
+                            auth_uid = excluded.auth_uid,
+                            actualizado_en = excluded.actualizado_en`)
+    .bind(retoId, usuarioId, email, authUid, Date.now())
+    .run();
+}
+
+async function quitarCorreo(env, retoId, usuarioId) {
+  await env.DB
+    .prepare('DELETE FROM correos WHERE reto_id = ? AND usuario_id = ?')
+    .bind(retoId, usuarioId)
+    .run();
+}
 
 /* ── Firestore por REST, con la identidad propia del Worker ─────────── */
 
@@ -173,10 +250,10 @@ async function solicitar(env, cuerpo, origen) {
   const perfil = await leerDoc(env, idToken, `retos/${retoId}/usuarios/${encodeURIComponent(usuarioId)}`);
   if (!perfil || perfil.estado !== 'Activo') return json({ error: 'no_encontrado' }, origen, 404);
 
-  const registro = await leerDoc(env, idToken, `retos/${retoId}/correos/${encodeURIComponent(usuarioId)}`);
+  const email = await leerCorreo(env, retoId, usuarioId);
   // Sin correo registrado no hay nada que enviar: la app manda a pedirle el
   // restablecimiento al administrador.
-  if (!registro?.email) return json({ ok: true, tieneCorreo: false }, origen);
+  if (!email) return json({ ok: true, tieneCorreo: false }, origen);
 
   const codigo = generarCodigo();
   await env.CODIGOS.put(
@@ -190,7 +267,7 @@ async function solicitar(env, cuerpo, origen) {
   );
 
   const enviado = await enviarCorreo(env, {
-    para: registro.email,
+    para: email,
     nombre: perfil.nombre || usuarioId,
     codigo,
     retoId,
@@ -203,7 +280,7 @@ async function solicitar(env, cuerpo, origen) {
   return json({
     ok: true,
     tieneCorreo: true,
-    correo: enmascarar(registro.email),
+    correo: enmascarar(email),
     expiraEn: VIGENCIA_SEG,
   }, origen);
 }
@@ -245,6 +322,40 @@ async function verificar(env, cuerpo, origen) {
   return json({ ok: true }, origen);
 }
 
+/**
+ * Registrar / consultar / quitar el correo del propio participante.
+ * Requiere su ID token de Firebase Auth: el email sintético de la cuenta
+ * demuestra de qué perfil es dueño, así nadie registra correo en cuenta ajena.
+ */
+async function correo(env, request, cuerpo, origen, accion) {
+  const { retoId, usuarioId } = cuerpo;
+  if (!esRetoValido(retoId) || !esUsuarioValido(usuarioId)) {
+    return json({ error: 'datos_invalidos' }, origen, 400);
+  }
+
+  const usuario = await usuarioDesdeToken(env, request);
+  if (!usuario) return json({ error: 'unauthenticated' }, origen, 401);
+  if (!esDuenoDelPerfil(usuario.email, retoId, usuarioId)) {
+    return json({ error: 'no_es_tu_perfil' }, origen, 403);
+  }
+
+  if (accion === 'leer') {
+    return json({ ok: true, correo: await leerCorreo(env, retoId, usuarioId) }, origen);
+  }
+
+  if (accion === 'borrar') {
+    await quitarCorreo(env, retoId, usuarioId);
+    return json({ ok: true }, origen);
+  }
+
+  const email = String(cuerpo.email || '').trim().toLowerCase();
+  if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email)) {
+    return json({ error: 'correo_invalido' }, origen, 400);
+  }
+  await escribirCorreo(env, retoId, usuarioId, email, usuario.uid);
+  return json({ ok: true, correo: email }, origen);
+}
+
 /* ── entrada ────────────────────────────────────────────────────────── */
 
 export default {
@@ -258,6 +369,9 @@ export default {
 
     const { pathname } = new URL(request.url);
     try {
+      if (pathname === '/correo/guardar') return await correo(env, request, cuerpo, origen, 'guardar');
+      if (pathname === '/correo/leer') return await correo(env, request, cuerpo, origen, 'leer');
+      if (pathname === '/correo/borrar') return await correo(env, request, cuerpo, origen, 'borrar');
       if (pathname === '/recuperar/solicitar') return await solicitar(env, cuerpo, origen);
       if (pathname === '/recuperar/verificar') return await verificar(env, cuerpo, origen);
     } catch (err) {
