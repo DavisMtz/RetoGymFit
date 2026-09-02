@@ -1,0 +1,17 @@
+{
+  "name": "retogymfit-auth-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Recuperación de contraseña por código al correo (Brevo + KV)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:brevo": "wrangler secret put BREVO_API_KEY",
+    "secret:worker-token": "wrangler secret put WORKER_REFRESH_TOKEN",
+    "test": "node test/dueno.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  }
+}

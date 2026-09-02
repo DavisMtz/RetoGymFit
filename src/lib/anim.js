@@ -196,3 +196,148 @@ export function entradaCelebracion(overlay) {
   }
   return () => tl.kill();
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMA PATRIO — septiembre
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Vaivén del papel picado.
+ *
+ * El stagger es lo que hace que se sienta cuerda y no bloque: cada banderín
+ * arranca un poco después que el anterior, así la onda recorre la fila como
+ * lo haría el aire. Sin él, los doce se mecerían a la vez y parecería un
+ * cartón rígido.
+ */
+export function mecerPapelPicado(fila) {
+  if (!fila || reducido()) return undefined;
+  const banderines = Array.from(fila.children);
+  if (!banderines.length) return undefined;
+  const tl = gsap.timeline({ repeat: -1, yoyo: true });
+  tl.fromTo(
+    banderines,
+    { rotate: -2.6 },
+    {
+      rotate: 2.6,
+      duration: 2.6,
+      ease: 'sine.inOut',
+      stagger: { each: 0.09, from: 'start' },
+    },
+  );
+  return () => tl.kill();
+}
+
+/** Entrada de la guirnalda: cae desde arriba y se asienta con rebote. */
+export function caerPapelPicado(fila) {
+  if (!fila || reducido()) return;
+  gsap.fromTo(
+    Array.from(fila.children),
+    { y: -70, opacity: 0, rotate: 0 },
+    {
+      y: 0, opacity: 0.92, duration: 1.1, ease: 'elastic.out(0.65, 0.5)',
+      stagger: { each: 0.045, from: 'center' },
+    },
+  );
+}
+
+/** Aparición del emblema del modal: se dibuja el trazo y luego entra el relleno. */
+export function trazarEmblema(svg) {
+  if (!svg || reducido()) return;
+  const trazos = svg.querySelectorAll('[data-trazo]');
+  gsap.fromTo(
+    trazos,
+    { strokeDasharray: 320, strokeDashoffset: 320, opacity: 0 },
+    { strokeDashoffset: 0, opacity: 1, duration: 1.15, ease: 'power2.inOut', stagger: 0.12 },
+  );
+  gsap.fromTo(
+    svg.querySelectorAll('[data-relleno]'),
+    { scale: 0, transformOrigin: '50% 50%' },
+    { scale: 1, duration: 0.7, ease: 'back.out(2.2)', stagger: 0.06, delay: 0.5 },
+  );
+}
+
+/**
+ * Fuegos artificiales de la noche del Grito.
+ *
+ * Lienzo 2D movido por el ticker de GSAP, no WebGL: son unas cientos de
+ * partículas y esta app se usa en el gimnasio, con la pantalla a media luz y
+ * la batería a medias. Un contexto WebGL costaría más batería y más KB que
+ * todo lo que ahorra, para un efecto que a 60fps se ve igual.
+ *
+ * Devuelve la función para detenerlo.
+ */
+export function cohetesDelGrito(canvas, colores) {
+  if (!canvas || reducido()) return () => {};
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let ancho = 0;
+  let alto = 0;
+
+  const redimensionar = () => {
+    ancho = canvas.clientWidth;
+    alto = canvas.clientHeight;
+    canvas.width = ancho * dpr;
+    canvas.height = alto * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  redimensionar();
+  window.addEventListener('resize', redimensionar);
+
+  const particulas = [];
+  const GRAVEDAD = 0.045;
+
+  function estallar(x, y, color) {
+    const n = 46 + Math.floor(Math.random() * 20);
+    for (let i = 0; i < n; i += 1) {
+      const ang = (Math.PI * 2 * i) / n + Math.random() * 0.2;
+      const vel = 1.6 + Math.random() * 2.4;
+      particulas.push({
+        x, y,
+        vx: Math.cos(ang) * vel,
+        vy: Math.sin(ang) * vel,
+        vida: 1,
+        decaimiento: 0.008 + Math.random() * 0.009,
+        color,
+      });
+    }
+  }
+
+  let desdeUltimo = 0;
+  const tick = () => {
+    ctx.clearRect(0, 0, ancho, alto);
+
+    // Un cohete nuevo cada ~45 frames, en la mitad superior de la pantalla
+    desdeUltimo += 1;
+    if (desdeUltimo > 45) {
+      desdeUltimo = 0;
+      estallar(
+        ancho * (0.15 + Math.random() * 0.7),
+        alto * (0.12 + Math.random() * 0.33),
+        colores[Math.floor(Math.random() * colores.length)],
+      );
+    }
+
+    for (let i = particulas.length - 1; i >= 0; i -= 1) {
+      const p = particulas[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += GRAVEDAD;
+      p.vx *= 0.987;          // el aire las frena
+      p.vida -= p.decaimiento;
+      if (p.vida <= 0) { particulas.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.max(p.vida, 0);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  gsap.ticker.add(tick);
+  return () => {
+    gsap.ticker.remove(tick);
+    window.removeEventListener('resize', redimensionar);
+    ctx.clearRect(0, 0, ancho, alto);
+  };
+}

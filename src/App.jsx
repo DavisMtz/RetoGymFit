@@ -3,10 +3,14 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider, TabBar, AnimeIntro, useToast, ConexionPill } from './components/ui';
 import InstalarBanner from './components/InstalarBanner';
+import CorreoBanner from './components/CorreoBanner';
+import PapelPicado from './components/PapelPicado';
+import PatrioBienvenida from './components/PatrioBienvenida';
 import AvisoFotos from './components/AvisoFotos';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
+import { resolverPatrio, yaVioBienvenida } from './lib/patrio';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
@@ -59,6 +63,22 @@ function Shell() {
   const [intro, setIntro] = useState(false);
   const previo = useRef(autenticado);
   const paginaRef = useRef(null);
+  const [patrio, setPatrio] = useState(false);        // ¿tema patrio encendido?
+  const [bienvenida, setBienvenida] = useState(false); // ¿toca el modal de una vez?
+
+  // Tema patrio: resuelve fecha → interruptor global del admin → preferencia
+  // personal, y aplica el resultado en <html>. Se re-evalúa al cambiar de reto
+  // porque el interruptor global es por reto.
+  useEffect(() => {
+    if (!autenticado || esAdmin || !reto) { setPatrio(false); return undefined; }
+    let activo = true;
+    resolverPatrio(reto.id).then((encendido) => {
+      if (!activo) return;
+      setPatrio(encendido);
+      if (encendido && !yaVioBienvenida()) setBienvenida(true);
+    });
+    return () => { activo = false; };
+  }, [autenticado, esAdmin, reto]);
 
   // Transición de página con GSAP: cascada de los bloques de la pantalla.
   // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una
@@ -123,7 +143,10 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      {patrio && <PapelPicado />}
+      {bienvenida && <PatrioBienvenida onCerrar={() => setBienvenida(false)} />}
       <InstalarBanner />
+      <CorreoBanner />
       <AvisoFotos />
       <TabBar />
     </>

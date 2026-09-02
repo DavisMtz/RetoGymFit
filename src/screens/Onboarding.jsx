@@ -7,7 +7,8 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { LISTA_RETOS } from '../config/retos';
-import { obtenerUsuariosActivos } from '../data/queries';
+import { obtenerUsuariosActivos, obtenerUsuario } from '../data/queries';
+import { solicitarCodigo, verificarCodigo, mensajeDeError } from '../lib/recuperacion';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
 import { Avatar, vibrate, PeopleSkeleton } from '../components/ui';
@@ -49,6 +50,13 @@ export default function Onboarding() {
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [modalOlvido, setModalOlvido] = useState(false);
+  // Recuperación por código: 'inicio' → 'codigo' → 'listo', o 'sinCorreo'
+  const [olvidoPaso, setOlvidoPaso] = useState('inicio');
+  const [codigo, setCodigo] = useState('');
+  const [correoMasked, setCorreoMasked] = useState('');
+  const [errorOlvido, setErrorOlvido] = useState('');
+  const [ocupadoOlvido, setOcupadoOlvido] = useState(false);
+  const [expiraEn, setExpiraEn] = useState(0);
 
   useEffect(() => {
     document.body.dataset.reto = reto?.id || '';
@@ -115,6 +123,74 @@ export default function Onboarding() {
   }, [usuarios, busqueda]);
 
   const tienePass = Boolean(elegido?.hasPassword && elegido?.authUid);
+
+  // Cuenta atrás de la vigencia del código (5 min), solo mientras se pide.
+  useEffect(() => {
+    if (expiraEn <= 0) return undefined;
+    const t = setInterval(() => setExpiraEn((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [expiraEn > 0]);
+
+  function abrirOlvido() {
+    vibrate();
+    setOlvidoPaso('inicio');
+    setCodigo('');
+    setErrorOlvido('');
+    setCorreoMasked('');
+    setExpiraEn(0);
+    setModalOlvido(true);
+  }
+
+  /** Paso 1: pedirle al Worker que mande el código al correo registrado. */
+  async function pedirCodigo() {
+    if (ocupadoOlvido) return;
+    setErrorOlvido('');
+    setOcupadoOlvido(true);
+    try {
+      const r = await solicitarCodigo(reto.id, elegido.id);
+      if (r.ok && r.tieneCorreo === false) { setOlvidoPaso('sinCorreo'); return; }
+      if (!r.ok) { setErrorOlvido(mensajeDeError(r)); return; }
+      setCorreoMasked(r.correo || '');
+      setExpiraEn(r.expiraEn || 300);
+      setOlvidoPaso('codigo');
+    } catch {
+      setErrorOlvido('Sin conexión. Revisa tu señal.');
+    } finally {
+      setOcupadoOlvido(false);
+    }
+  }
+
+  /**
+   * Paso 2: validar el código. Si cuadra, el Worker libera el perfil; volvemos
+   * a leerlo para tomar el resetGen real (de él depende el email sintético con
+   * el que se creará la cuenta nueva) y el paso 3 pasa a "crear contraseña".
+   */
+  async function confirmarCodigo(e) {
+    e.preventDefault();
+    if (ocupadoOlvido) return;
+    setErrorOlvido('');
+    if (!/^\d{6}$/.test(codigo.trim())) { setErrorOlvido('El código son 6 dígitos.'); return; }
+    setOcupadoOlvido(true);
+    try {
+      const r = await verificarCodigo(reto.id, elegido.id, codigo);
+      if (!r.ok) { setErrorOlvido(mensajeDeError(r)); return; }
+      const fresco = await obtenerUsuario(reto.id, elegido.id);
+      setElegido((u) => ({
+        ...u,
+        hasPassword: false,
+        authUid: null,
+        resetGen: fresco?.resetGen ?? (u.resetGen || 0) + 1,
+      }));
+      setPass('');
+      setPass2('');
+      setError('');
+      setOlvidoPaso('listo');
+    } catch {
+      setErrorOlvido('Sin conexión. Revisa tu señal.');
+    } finally {
+      setOcupadoOlvido(false);
+    }
+  }
 
   async function entrar(e) {
     e.preventDefault();
@@ -304,23 +380,100 @@ export default function Onboarding() {
           </button>
         </form>
         {tienePass && (
-          <button className="btn-secondary" type="button" onClick={() => { vibrate(); setModalOlvido(true); }}>
+          <button className="btn-secondary" type="button" onClick={abrirOlvido}>
             ¿Olvidaste tu contraseña?
           </button>
         )}
       </div>
 
-      {/* Modal olvidé mi contraseña */}
+      {/* Modal olvidé mi contraseña: código al correo, o aviso si no lo registró */}
       <div className={`modal-overlay ${modalOlvido ? 'show' : ''}`}>
         <div className="modal">
-          <div className="modal-icon">🔑</div>
-          <h2>Recuperar tu acceso</h2>
-          <p>
-            Pídele al administrador del reto que <b>restablezca tu acceso</b>.
-            En cuanto lo haga, vuelve aquí y podrás crear una contraseña nueva
-            al entrar. Tu historial y tu racha quedan intactos.
-          </p>
-          <button className="btn-dark" type="button" onClick={() => setModalOlvido(false)}>Entendido</button>
+          {olvidoPaso === 'inicio' && (
+            <>
+              <div className="modal-icon">🔑</div>
+              <h2>Recuperar tu acceso</h2>
+              <p>
+                Te enviamos un código al correo que registraste en tu perfil.
+                Con él creas una contraseña nueva — tu historial y tu racha
+                quedan intactos.
+              </p>
+              <p className="error-text">{errorOlvido}</p>
+              <button className="btn-dark" type="button" onClick={pedirCodigo} disabled={ocupadoOlvido}>
+                {ocupadoOlvido ? 'Enviando…' : 'Enviarme el código'}
+              </button>
+              <button className="btn-secondary" type="button" onClick={() => setModalOlvido(false)}>Cancelar</button>
+            </>
+          )}
+
+          {olvidoPaso === 'codigo' && (
+            <>
+              <div className="modal-icon">✉️</div>
+              <h2>Revisa tu correo</h2>
+              <p>
+                Enviamos un código de 6 dígitos a <b>{correoMasked}</b>.
+                {expiraEn > 0 && (
+                  <> Caduca en <b>{Math.floor(expiraEn / 60)}:{String(expiraEn % 60).padStart(2, '0')}</b>.</>
+                )}
+              </p>
+              <form onSubmit={confirmarCodigo}>
+                <div className="field">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="000000"
+                    style={{ textAlign: 'center', letterSpacing: '0.4em', fontSize: '22px' }}
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
+                  />
+                </div>
+                <p className="error-text">{errorOlvido}</p>
+                <button className="btn-dark" type="submit" disabled={ocupadoOlvido}>
+                  {ocupadoOlvido ? 'Verificando…' : 'Confirmar'}
+                </button>
+              </form>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => { setOlvidoPaso('inicio'); setErrorOlvido(''); setCodigo(''); }}
+              >
+                {expiraEn > 0 ? 'No me llegó' : 'Pedir otro código'}
+              </button>
+            </>
+          )}
+
+          {olvidoPaso === 'listo' && (
+            <>
+              <div className="modal-icon">✅</div>
+              <h2>Acceso restablecido</h2>
+              <p>
+                Listo. Cierra este aviso y <b>crea tu contraseña nueva</b> para entrar.
+                Tu historial y tu racha siguen ahí.
+              </p>
+              <button className="btn-dark" type="button" onClick={() => setModalOlvido(false)}>
+                Crear contraseña
+              </button>
+            </>
+          )}
+
+          {olvidoPaso === 'sinCorreo' && (
+            <>
+              <div className="modal-icon">📋</div>
+              <h2>No tienes correo registrado</h2>
+              <p>
+                Sin un correo no podemos enviarte el código. Pídele al
+                <b> administrador del reto</b> que <b>restablezca tu acceso</b>; en cuanto
+                lo haga, vuelve aquí y crea una contraseña nueva.
+              </p>
+              <p>
+                Para la próxima, regístralo en <b>Perfil → Correo de recuperación</b> y
+                podrás recuperarla tú solo.
+              </p>
+              <button className="btn-dark" type="button" onClick={() => setModalOlvido(false)}>Entendido</button>
+            </>
+          )}
         </div>
       </div>
     </div>
