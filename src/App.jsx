@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider, TabBar, AnimeIntro, useToast, ConexionPill } from './components/ui';
 import InstalarBanner from './components/InstalarBanner';
+import CorreoBanner from './components/CorreoBanner';
 import AvisoFotos from './components/AvisoFotos';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
@@ -124,6 +125,7 @@ function Shell() {
         </Routes>
       </div>
       <InstalarBanner />
+      <CorreoBanner />
       <AvisoFotos />
       <TabBar />
     </>

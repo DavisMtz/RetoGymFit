@@ -11,6 +11,8 @@ import { obtenerHistorial, contarPorTipo } from '../data/queries';
 import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
 import { obtenerTema, guardarTema } from '../lib/tema';
+import { obtenerCorreo, guardarCorreo, correoValido } from '../lib/recuperacion';
+import { silenciarAvisoCorreo } from '../components/CorreoBanner';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
 export default function Perfil() {
@@ -36,6 +38,11 @@ export default function Perfil() {
   const [pushCargando, setPushCargando] = useState(false);
   const [diasEstaSemana, setDiasEstaSemana] = useState(0);
   const [tema, setTema] = useState(obtenerTema);
+  const [correo, setCorreo] = useState(null);       // correo de recuperación registrado
+  const [modalCorreo, setModalCorreo] = useState(false);
+  const [correoInput, setCorreoInput] = useState('');
+  const [errorCorreo, setErrorCorreo] = useState('');
+  const [guardandoCorreo, setGuardandoCorreo] = useState(false);
 
   function toggleTema() {
     vibrate(15);
@@ -45,6 +52,31 @@ export default function Perfil() {
   }
 
   useEffect(() => { pushDisponible().then(setPushOk); }, []);
+
+  useEffect(() => {
+    let activo = true;
+    obtenerCorreo(reto.id, usuario.id).then((e) => { if (activo) setCorreo(e); });
+    return () => { activo = false; };
+  }, [reto.id, usuario.id]);
+
+  async function guardarCorreoRecuperacion(e) {
+    e.preventDefault();
+    setErrorCorreo('');
+    if (!correoValido(correoInput)) { setErrorCorreo('Escribe un correo válido.'); return; }
+    setGuardandoCorreo(true);
+    try {
+      const limpio = await guardarCorreo(reto.id, usuario.id, correoInput);
+      setCorreo(limpio);
+      silenciarAvisoCorreo();   // ya no hace falta el banner de aviso
+      setModalCorreo(false);
+      setCorreoInput('');
+      toast('Correo guardado ✓');
+    } catch {
+      setErrorCorreo('No se pudo guardar. Revisa tu conexión.');
+    } finally {
+      setGuardandoCorreo(false);
+    }
+  }
 
   async function togglePush() {
     if (pushCargando) return;
@@ -259,6 +291,20 @@ export default function Perfil() {
             <span className={`honor-switch ${pushActivo ? 'push-on' : ''}`} style={{ pointerEvents: 'none' }} />
           </button>
         )}
+        <button
+          className="pref-row"
+          type="button"
+          onClick={() => { vibrate(); setCorreoInput(correo || ''); setErrorCorreo(''); setModalCorreo(true); }}
+        >
+          <span className="pr-icon">{correo ? '✉️' : '⚠️'}</span>
+          <span className="pr-text">
+            <span className="pr-title">Correo de recuperación</span>
+            <span className="pr-sub">
+              {correo || 'Sin registrar — lo necesitas si olvidas tu contraseña'}
+            </span>
+          </span>
+        </button>
+
         <button className="pref-row" type="button" onClick={() => { vibrate(); setModalPass(true); setError(''); }}>
           <span className="pr-icon">🔑</span>
           <span className="pr-text">
@@ -276,6 +322,34 @@ export default function Perfil() {
       </section>
 
       <ReglasSheet reto={reto} abierto={reglas} onClose={() => setReglas(false)} />
+
+      {/* Modal correo de recuperación */}
+      <div className={`modal-overlay ${modalCorreo ? 'show' : ''}`}>
+        <div className="modal">
+          <h2>{correo ? 'Cambia tu correo' : 'Registra tu correo'}</h2>
+          <p>
+            Solo se usa para recuperar tu contraseña: te enviamos un código y vuelves
+            a entrar sin esperar a nadie. Nadie más del reto puede verlo.
+          </p>
+          <form onSubmit={guardarCorreoRecuperacion}>
+            <div className="field">
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="tucorreo@ejemplo.com"
+                value={correoInput}
+                onChange={(e) => setCorreoInput(e.target.value)}
+              />
+            </div>
+            <p className="error-text">{errorCorreo}</p>
+            <button className="btn-dark" type="submit" disabled={guardandoCorreo}>
+              {guardandoCorreo ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button className="btn-secondary" type="button" onClick={() => setModalCorreo(false)}>Cancelar</button>
+          </form>
+        </div>
+      </div>
 
       {/* Modal cambiar contraseña */}
       <div className={`modal-overlay ${modalPass ? 'show' : ''}`}>

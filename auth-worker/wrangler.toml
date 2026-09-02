@@ -1,0 +1,26 @@
+name = "retogymfit-auth"
+main = "src/index.js"
+compatibility_date = "2026-08-28"
+
+routes = [
+  { pattern = "auth-retogymfit.logidma.com", custom_domain = true }
+]
+
+# Códigos de recuperación: solo el hash, con TTL de 5 min (expiración nativa
+# de KV, así ninguno sobrevive a su vigencia aunque nadie lo borre).
+[[kv_namespaces]]
+binding = "CODIGOS"
+id = "3920970229c0448c921ec40bcf919a1d"
+
+[vars]
+FIREBASE_API_KEY = "AIzaSyDQwFU9hcM1iJbRJW5zArdhvlV-vqaRIQE"
+FIREBASE_PROJECT_ID = "retogymfit"
+APP_ORIGIN = "https://retogymfit.web.app"
+BREVO_SENDER = "davismartinesad@gmail.com"
+
+[observability]
+enabled = true
+
+# Secrets (wrangler secret put …), NUNCA en este archivo:
+#   BREVO_API_KEY        — llave de la API de Brevo
+#   WORKER_REFRESH_TOKEN — refresh token de auth-worker@retogymfit.app
