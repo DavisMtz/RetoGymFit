@@ -18,7 +18,7 @@
  * Antes solo quitaba el atributo: el papel picado se quedaba colgado y encima
  * sin el padding que le hacía hueco, así que terminaba tapando la cabecera.
  */
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX } from './dates';
 import { esMesPatrio, decidirPatrio, CONFETI_PATRIO } from '../config/patrio';
@@ -110,16 +110,34 @@ export function apagarPatrio() {
 }
 
 /**
- * Resuelve las tres capas y aplica el resultado.
- * Devuelve true si el tema quedó encendido.
+ * Vigila las tres capas y mantiene el tema al día mientras la app esté
+ * abierta. Devuelve la baja, para el cleanup del efecto.
+ *
+ * El interruptor del admin se escucha EN VIVO (onSnapshot) en vez de leerse
+ * una sola vez al arrancar: apagarlo "para todo el reto" tiene que apagarlo
+ * en los teléfonos que ya están abiertos, no solo en el siguiente arranque.
+ * Es el mismo documento que ya se leía; un listener quieto no gasta lecturas
+ * mientras nadie lo cambia, así que sigue cabiendo de sobra en el plan Spark.
+ *
+ * Se escucha aunque tú lo tengas apagado en tu perfil: si no, al volver a
+ * activarlo desde Perfil encenderías lo que el admin ya había apagado.
  */
-export async function resolverPatrio(retoId) {
+export function vigilarPatrio(retoId) {
   const hoy = hoyMX();
-  // El interruptor del admin se consulta aunque el tema esté apagado por la
-  // preferencia personal: si no, activarlo luego desde Perfil encendería lo
-  // que el admin ya había apagado. Fuera de septiembre no hace falta ir.
-  globalActivo = esMesPatrio(hoy) ? await patrioGlobalActivo(retoId) : true;
-  return aplicarPatrio(decidirPatrio(hoy, { global: globalActivo, personal: prefiereePatrio() }));
+  const aplicar = () => aplicarPatrio(
+    decidirPatrio(hoy, { global: globalActivo, personal: prefiereePatrio() }),
+  );
+  // Fuera de septiembre no hay tema que valga: ni listener hace falta.
+  if (!esMesPatrio(hoy)) { globalActivo = true; aplicar(); return () => {}; }
+  return onSnapshot(
+    doc(db, 'retos', retoId),
+    (snap) => {
+      // Sin documento o sin el campo: encendido. Solo un false explícito apaga.
+      globalActivo = snap.exists() ? snap.data().temaPatrio !== false : true;
+      aplicar();
+    },
+    () => { aplicar(); }, // sin red: seguimos con lo último que se supo
+  );
 }
 
 /* ── orquestación con el resto de la app ────────────────────────────── */

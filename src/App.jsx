@@ -10,7 +10,7 @@ import AvisoFotos from './components/AvisoFotos';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
-import { resolverPatrio, yaVioBienvenida } from './lib/patrio';
+import { vigilarPatrio, apagarPatrio, suscribirPatrio, yaVioBienvenida } from './lib/patrio';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
@@ -66,19 +66,27 @@ function Shell() {
   const [patrio, setPatrio] = useState(false);        // ¿tema patrio encendido?
   const [bienvenida, setBienvenida] = useState(false); // ¿toca el modal de una vez?
 
-  // Tema patrio: resuelve fecha → interruptor global del admin → preferencia
-  // personal, y aplica el resultado en <html>. Se re-evalúa al cambiar de reto
-  // porque el interruptor global es por reto.
+  // El tema patrio es CSS (html[data-patrio]) MÁS lo que React monta aparte:
+  // la guirnalda de papel picado. Esta suscripción mantiene juntas a las dos
+  // mitades — sin ella, apagarlo desde Perfil quitaba el atributo pero dejaba
+  // la guirnalda colgada, y encima sin el padding que le hacía hueco, así que
+  // terminaba tapando la cabecera.
+  useEffect(() => suscribirPatrio(setPatrio), []);
+
+  // Fecha → interruptor global del admin (en vivo) → preferencia personal.
+  // Se re-suscribe al cambiar de reto porque el interruptor global es por
+  // reto. Aquí no se toca el estado `patrio`: lo mueve solo la suscripción
+  // de arriba, para que haya UNA sola fuente de verdad.
   useEffect(() => {
-    if (!autenticado || esAdmin || !reto) { setPatrio(false); return undefined; }
-    let activo = true;
-    resolverPatrio(reto.id).then((encendido) => {
-      if (!activo) return;
-      setPatrio(encendido);
-      if (encendido && !yaVioBienvenida()) setBienvenida(true);
-    });
-    return () => { activo = false; };
+    if (!autenticado || esAdmin || !reto) { apagarPatrio(); return undefined; }
+    return vigilarPatrio(reto.id);
   }, [autenticado, esAdmin, reto]);
+
+  // El modal de bienvenida, una sola vez por temporada, en cuanto el tema
+  // quede encendido de verdad.
+  useEffect(() => {
+    if (patrio && !yaVioBienvenida()) setBienvenida(true);
+  }, [patrio]);
 
   // Transición de página con GSAP: cascada de los bloques de la pantalla.
   // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una

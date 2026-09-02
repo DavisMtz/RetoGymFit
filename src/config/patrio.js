@@ -47,6 +47,22 @@ export function esMesPatrio(ymd) {
   return Number(String(ymd).slice(5, 7)) === MES_PATRIO;
 }
 
+/**
+ * Las TRES capas de control resueltas en un solo lugar:
+ *
+ *   1. FECHA    — solo septiembre.
+ *   2. GLOBAL   — el admin lo apagó para todo el reto.
+ *   3. PERSONAL — cada quien lo apagó para sí desde Perfil.
+ *
+ * Las tres tienen que decir que sí, y ninguna se salta a las otras: en
+ * particular, activarlo en tu perfil NO enciende lo que el admin apagó. Vive
+ * aquí, sin DOM ni red, para poder probarlo (test/patrio.test.mjs) y para que
+ * el tema no se encienda a medias desde dos lados distintos.
+ */
+export function decidirPatrio(ymd, { global = true, personal = true } = {}) {
+  return esMesPatrio(ymd) && global !== false && personal !== false;
+}
+
 /** El Grito y el día de la Independencia: merecen fuegos artificiales. */
 export function esNocheDelGrito(ymd) {
   const dia = Number(String(ymd).slice(8, 10));

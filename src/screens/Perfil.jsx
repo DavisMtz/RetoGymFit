@@ -12,7 +12,7 @@ import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
 import { obtenerTema, guardarTema } from '../lib/tema';
 import { obtenerCorreo, guardarCorreo, correoValido } from '../lib/recuperacion';
-import { prefiereePatrio, guardarPreferencia } from '../lib/patrio';
+import { prefiereePatrio, guardarPreferencia, patrioEncendido, suscribirPatrio } from '../lib/patrio';
 import { esMesPatrio } from '../config/patrio';
 import { silenciarAvisoCorreo } from '../components/CorreoBanner';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
@@ -45,7 +45,13 @@ export default function Perfil() {
   const [correoInput, setCorreoInput] = useState('');
   const [errorCorreo, setErrorCorreo] = useState('');
   const [guardandoCorreo, setGuardandoCorreo] = useState(false);
-  const [patrio, setPatrio] = useState(prefiereePatrio);
+  const [patrio, setPatrio] = useState(prefiereePatrio);               // tu preferencia
+  const [patrioVisible, setPatrioVisible] = useState(patrioEncendido); // lo que se ve
+
+  // Tu preferencia y lo que de verdad se ve no son lo mismo: el admin puede
+  // tener el tema apagado para todo el reto. La fila muestra las dos cosas en
+  // vez de prometer una fiesta que no está pasando.
+  useEffect(() => suscribirPatrio(setPatrioVisible), []);
 
   // Solo se ofrece en septiembre: fuera del mes patrio la fila no aplica.
   const enMesPatrio = esMesPatrio(hoyMX());
@@ -54,8 +60,12 @@ export default function Perfil() {
     vibrate(15);
     const nuevo = !patrio;
     setPatrio(nuevo);
-    guardarPreferencia(nuevo);
-    toast(nuevo ? 'Tema patrio activado 🇲🇽' : 'Tema patrio desactivado');
+    // Devuelve si el tema quedó encendido DE VERDAD, no lo que pediste.
+    const encendido = guardarPreferencia(nuevo);
+    if (!nuevo) toast('Tema patrio desactivado');
+    else toast(encendido
+      ? 'Tema patrio activado 🇲🇽'
+      : 'Activado en tu perfil, pero está apagado para todo el reto');
   }
 
   function toggleTema() {
@@ -307,13 +317,15 @@ export default function Perfil() {
         )}
         {enMesPatrio && (
           <button className="pref-row" type="button" onClick={togglePatrio}>
-            <span className="pr-icon">{patrio ? '🇲🇽' : '🎨'}</span>
+            <span className="pr-icon">{patrioVisible ? '🇲🇽' : '🎨'}</span>
             <span className="pr-text">
               <span className="pr-title">Tema patrio</span>
               <span className="pr-sub">
-                {patrio
-                  ? 'Septiembre en verde, blanco y rojo · toca para quitarlo'
-                  : 'Desactivado · toca para volver a la fiesta'}
+                {!patrio
+                  ? 'Desactivado · toca para volver a la fiesta'
+                  : patrioVisible
+                    ? 'Septiembre en verde, blanco y rojo · toca para quitarlo'
+                    : 'Activado en tu perfil, pero apagado para todo el reto'}
               </span>
             </span>
           </button>

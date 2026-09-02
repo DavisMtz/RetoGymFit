@@ -13,7 +13,7 @@ import { strict as assert } from 'node:assert';
 const mod = await import(
   'data:text/javascript,' + encodeURIComponent(readFileSync('src/config/patrio.js', 'utf8'))
 );
-const { esMesPatrio, esNocheDelGrito, diasParaElGrito, saludoPatrio } = mod;
+const { esMesPatrio, esNocheDelGrito, diasParaElGrito, saludoPatrio, decidirPatrio } = mod;
 
 let fallos = 0;
 const prueba = (desc, fn) => {
@@ -45,6 +45,14 @@ prueba('inicio de mes', () => assert.match(saludoPatrio('2026-09-02').titulo, /m
 prueba('cuenta regresiva', () => assert.match(saludoPatrio('2026-09-10').titulo, /Faltan 5 días/));
 prueba('el Grito', () => assert.match(saludoPatrio('2026-09-15').titulo, /Viva México/));
 prueba('después del Grito', () => assert.match(saludoPatrio('2026-09-22').titulo, /Sigue/));
+
+console.log('decidirPatrio — las tres capas mandan juntas');
+prueba('septiembre + admin + tú: encendido', () => assert.equal(decidirPatrio('2026-09-10', { global: true, personal: true }), true));
+prueba('lo apagas en tu perfil: apagado', () => assert.equal(decidirPatrio('2026-09-10', { global: true, personal: false }), false));
+prueba('el admin lo apaga para el reto: apagado', () => assert.equal(decidirPatrio('2026-09-10', { global: false, personal: false }), false));
+prueba('activarlo en tu perfil NO enciende lo que el admin apagó', () => assert.equal(decidirPatrio('2026-09-10', { global: false, personal: true }), false));
+prueba('fuera de septiembre no hay tema aunque todo diga que sí', () => assert.equal(decidirPatrio('2026-10-01', { global: true, personal: true }), false));
+prueba('sin capas explícitas: solo manda la fecha', () => assert.equal(decidirPatrio('2026-09-10'), true));
 
 console.log(fallos === 0 ? '\n✓ todo pasa' : `\n✗ ${fallos} fallos`);
 process.exit(fallos ? 1 : 0);
