@@ -4,19 +4,42 @@
  * Cada banderín es un SVG de una sola ruta con `fill-rule: evenodd`: el
  * contorno y los recortes van en el mismo path, que es justo como se hace el
  * papel picado de verdad —una hoja doblada y perforada, no piezas pegadas—.
+ * En San Salvador Huixcolotla, donde nació el oficio, el diseño se traza
+ * sobre varias hojas superpuestas y se pican todas a la vez con cincel sobre
+ * un molde de plomo; los motivos son florales, geométricos y solares, que son
+ * justo los que están aquí.
  *
- * Las variantes son deterministas por índice: la guirnalda se ve variada pero
- * idéntica en cada render, así no "salta" al re-montarse el componente.
+ * LA CUERDA NO VA RECTA. Una guirnalda colgada de dos puntos hace comba, y
+ * ese detalle es lo que separa una guirnalda de una fila de rectángulos. La
+ * comba es una parábola —`4u(1-u)`: cero en los extremos, máxima en medio— y
+ * cada banderín se cuelga a la profundidad que le toca (`--pp-caida`) con la
+ * inclinación que la cuerda tiene en ese punto (`--pp-giro`), así que la fila
+ * se abre en abanico como las de verdad.
  *
- * El vaivén lo hace GSAP (mecerPapelPicado en src/lib/anim.js), con desfase
- * por banderín para que la fila ondule como una cuerda y no como un bloque.
+ * La misma parábola dibuja la cuerda: el viewBox del hilo mide 1 de alto y su
+ * curva toca exactamente esa base, así que la ALTURA del elemento es la comba
+ * y banderines e hilo coinciden sin medir un solo píxel en JavaScript.
+ *
+ * El vaivén y la entrada los hace GSAP (src/lib/anim.js).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { COLORES_PAPEL } from '../config/patrio';
-import { mecerPapelPicado } from '../lib/anim';
+import { mecerPapelPicado, colgarPapelPicado, descolgarPapelPicado } from '../lib/anim';
 
 const A = 60;   // ancho del banderín en el viewBox
 const AL = 104; // alto — el papel picado real es claramente más alto que ancho
+
+/**
+ * Pendiente de la cuerda en los extremos, en grados por unidad de parábola.
+ * Calibrada para el ancho de un teléfono (que es donde se usa la app): con
+ * una comba de ~12 px sobre ~400 px de cuerda, el primer banderín queda a
+ * ~6.6°. En pantallas anchas la comba se topa y el abanico se abre un pelo
+ * más de la cuenta, una diferencia de grados que nadie va a medir.
+ */
+const INCLINACION = 1.85;
+
+/** En pantallas angostas caben menos banderines sin que se vean apretados. */
+const ANGOSTO = '(max-width: 420px)';
 
 /** Borde inferior en picos, como el papel picado clásico. */
 function bordeZigzag(picos = 5, base = AL - 26, punta = AL) {
@@ -85,29 +108,70 @@ const VARIANTES = [
   },
 ];
 
-export default function PapelPicado({ cantidad = 9 }) {
-  const filaRef = useRef(null);
+/** Cuántos banderines caben. Se mide de verdad, no se esconden con CSS: la
+ *  comba depende de CUÁNTOS hay, y unos ocultos la dejarían mal calculada. */
+function usarCantidad() {
+  const consulta = () => (typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia(ANGOSTO).matches
+    : false);
+  const [angosto, setAngosto] = useState(consulta);
+  useEffect(() => {
+    const mq = window.matchMedia?.(ANGOSTO);
+    if (!mq) return undefined;
+    const alCambiar = (e) => setAngosto(e.matches);
+    mq.addEventListener('change', alCambiar);
+    return () => mq.removeEventListener('change', alCambiar);
+  }, []);
+  return angosto ? 7 : 9;
+}
 
-  useEffect(() => mecerPapelPicado(filaRef.current), []);
+export default function PapelPicado({ saliendo = false }) {
+  const filaRef = useRef(null);
+  const cantidad = usarCantidad();
+
+  // Se cuelga al aparecer y se mece mientras esté puesta. Al apagar el tema,
+  // `saliendo` la descuelga antes de que App la desmonte.
+  useEffect(() => {
+    if (saliendo) return undefined;
+    colgarPapelPicado(filaRef.current);
+    return mecerPapelPicado(filaRef.current);
+  }, [saliendo, cantidad]);
+
+  useEffect(() => {
+    if (saliendo) descolgarPapelPicado(filaRef.current);
+  }, [saliendo]);
 
   return (
     <div className="papel-picado" aria-hidden="true">
+      <svg className="pp-cuerda" viewBox="0 0 100 1" preserveAspectRatio="none" focusable="false">
+        <path d="M0,0 Q50,2 100,0" fill="none" vectorEffect="non-scaling-stroke" />
+      </svg>
       <div className="pp-fila" ref={filaRef}>
-        {Array.from({ length: cantidad }, (_, i) => (
-          <svg
-            key={i}
-            className="pp-banderin"
-            viewBox={`0 0 ${A} ${AL}`}
-            preserveAspectRatio="none"
-            focusable="false"
-          >
-            <path
-              d={VARIANTES[i % VARIANTES.length]()}
-              fill={COLORES_PAPEL[i % COLORES_PAPEL.length]}
-              fillRule="evenodd"
-            />
-          </svg>
-        ))}
+        {Array.from({ length: cantidad }, (_, i) => {
+          const u = (i + 0.5) / cantidad;          // dónde cae en la cuerda
+          const caida = 4 * u * (1 - u);           // fracción de la comba
+          const giro = (4 - 8 * u) * INCLINACION;  // pendiente de la cuerda ahí
+          return (
+            <span
+              key={i}
+              className="pp-nudo"
+              style={{ '--pp-caida': caida.toFixed(3), '--pp-giro': `${giro.toFixed(2)}deg` }}
+            >
+              <svg
+                className="pp-banderin"
+                viewBox={`0 0 ${A} ${AL}`}
+                preserveAspectRatio="none"
+                focusable="false"
+              >
+                <path
+                  d={VARIANTES[i % VARIANTES.length]()}
+                  fill={COLORES_PAPEL[i % COLORES_PAPEL.length]}
+                  fillRule="evenodd"
+                />
+              </svg>
+            </span>
+          );
+        })}
       </div>
     </div>
   );

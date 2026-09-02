@@ -65,6 +65,7 @@ function Shell() {
   const paginaRef = useRef(null);
   const [patrio, setPatrio] = useState(false);        // ¿tema patrio encendido?
   const [bienvenida, setBienvenida] = useState(false); // ¿toca el modal de una vez?
+  const [guirnalda, setGuirnalda] = useState(false);   // ¿sigue montado el papel picado?
 
   // El tema patrio es CSS (html[data-patrio]) MÁS lo que React monta aparte:
   // la guirnalda de papel picado. Esta suscripción mantiene juntas a las dos
@@ -87,6 +88,16 @@ function Shell() {
   useEffect(() => {
     if (patrio && !yaVioBienvenida()) setBienvenida(true);
   }, [patrio]);
+
+  // La guirnalda se queda un momento más que el tema para que se la lleve el
+  // aire en vez de esfumarse. El temporizador la desmonta pase lo que pase
+  // con la animación: apagar el tema NUNCA puede dejarla colgada.
+  useEffect(() => {
+    if (patrio) { setGuirnalda(true); return undefined; }
+    if (!guirnalda) return undefined;
+    const t = setTimeout(() => setGuirnalda(false), 720);
+    return () => clearTimeout(t);
+  }, [patrio, guirnalda]);
 
   // Transición de página con GSAP: cascada de los bloques de la pantalla.
   // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una
@@ -151,7 +162,7 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-      {patrio && <PapelPicado />}
+      {guirnalda && <PapelPicado saliendo={!patrio} />}
       {bienvenida && <PatrioBienvenida onCerrar={() => setBienvenida(false)} />}
       <InstalarBanner />
       <CorreoBanner />

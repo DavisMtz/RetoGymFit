@@ -40,48 +40,73 @@ html[data-patrio='on'] body::before {
    recorte; el vaivén lo hace GSAP (src/lib/anim.js → mecerPapelPicado). */
 
 .papel-picado {
+  /* Cuánto cae la cuerda en medio. La usan el hilo y cada nudo, así que las
+     dos combas son la misma por construcción y no hay que medir en JS. */
+  --pp-comba: min(3vw, 14px);
   position: fixed;
   /* Cuelga POR DEBAJO de la muesca, no detrás de ella. */
   top: env(safe-area-inset-top, 0px); left: 0; right: 0;
-  height: 92px;
+  height: 98px;
   z-index: 3;
   pointer-events: none;
   overflow: hidden;
 }
 
-/* La cuerda de la que cuelgan */
-.papel-picado::before {
-  content: '';
+/* La cuerda de la que cuelgan. Hace comba, como cualquier hilo colgado de
+   dos puntos: su viewBox mide 1 de alto y la curva toca justo esa base, así
+   que la ALTURA del elemento es la comba. */
+.pp-cuerda {
   position: absolute;
   top: 7px; left: -2%; right: -2%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22) 12%, rgba(255, 255, 255, 0.22) 88%, transparent);
-  border-radius: 2px;
+  height: var(--pp-comba);
+  overflow: visible;
+}
+
+.pp-cuerda path {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .pp-fila {
   display: flex;
   align-items: flex-start;
   gap: 2px;
-  padding: 6px 0 0;
+  padding: 7px 0 0;
   width: 100%;
 }
 
-.pp-banderin {
+/* El nudo: lo que amarra el banderín a la cuerda, a la altura que le toca.
+   Lleva el desplazamiento en padding (no en transform) para dejarle el
+   transform libre a la entrada y la salida de la guirnalda. */
+.pp-nudo {
   flex: 1 1 0;
   min-width: 0;
+  padding-top: calc(var(--pp-caida, 0) * var(--pp-comba));
+}
+
+.pp-banderin {
+  /* --pp-giro es la inclinación de la cuerda en este punto (fija, la pone el
+     componente); las otras dos las mueve GSAP y se SUMAN aquí, porque dos
+     tweens sobre rotate se pisarían. */
+  --pp-vaiven: 0deg;
+  --pp-rafaga: 0deg;
+  --pp-canto: 1;
+  display: block;
+  width: 100%;
   height: 76px;
-  transform-origin: 50% 0;   /* cuelga del clavo, se mece desde arriba */
+  transform: rotate(calc(var(--pp-giro, 0deg) + var(--pp-vaiven) + var(--pp-rafaga))) scaleX(var(--pp-canto));
+  transform-origin: 50% 0;   /* cuelga del nudo, se mece desde arriba */
   will-change: transform;
   opacity: 0.92;
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.35));
 }
 
-/* En pantallas chicas caben menos banderines sin que se vean apretados */
+/* En pantallas chicas cuelgan menos banderines (los cuenta el componente:
+   esconderlos con CSS dejaba la comba calculada para los que ya no están). */
 @media (max-width: 420px) {
-  .papel-picado { height: 76px; }
+  .papel-picado { height: 84px; }
   .pp-banderin { height: 62px; }
-  .pp-banderin:nth-child(n + 8) { display: none; }
 }
 
 /* Deja aire para que la guirnalda no tape la cabecera.
@@ -89,12 +114,12 @@ html[data-patrio='on'] body::before {
    .app-shell es max(20px, env(safe-area-inset-top)), y escribir un valor
    plano dejaba el contenido bajo la muesca en los iPhone con notch. */
 html[data-patrio='on'] .app-shell {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 78px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 84px);
 }
 
 @media (max-width: 420px) {
   html[data-patrio='on'] .app-shell {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 64px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 70px);
   }
 }
 
@@ -117,6 +142,17 @@ html[data-patrio='on'] .card::after {
     var(--pt-blanco) 33%, var(--pt-blanco) 66%,
     var(--pt-rojo-vivo) 66%, var(--pt-rojo-vivo) 100%);
   opacity: 0.55;
+  /* Se teje de izquierda a derecha al entrar la tarjeta, como el hilo en el
+     telar. Corre una sola vez por montaje, no en bucle: es un remate, no un
+     adorno que pida atención. El @media de global.css la anula si alguien
+     pidió menos movimiento. */
+  transform-origin: left center;
+  animation: pt-tejer 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pt-tejer {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 /* La tarjeta del bote se lleva el sarape completo, que es la más festiva */
@@ -186,8 +222,8 @@ html[data-tema='claro'][data-patrio='on'] body::before {
     radial-gradient(ellipse 70% 45% at 50% 118%, rgba(206, 17, 38, 0.08), transparent 62%);
 }
 
-html[data-tema='claro'] .papel-picado::before {
-  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.18) 12%, rgba(0, 0, 0, 0.18) 88%, transparent);
+html[data-tema='claro'] .pp-cuerda path {
+  stroke: rgba(0, 0, 0, 0.18);
 }
 
 /* ——— Accesibilidad ———————————————————————————————————————————————
@@ -195,6 +231,10 @@ html[data-tema='claro'] .papel-picado::before {
    El resto de la app ya respeta esto en JS (src/lib/anim.js). */
 
 @media (prefers-reduced-motion: reduce) {
-  .pp-banderin { animation: none !important; transform: none !important; }
+  .pp-banderin {
+    --pp-vaiven: 0deg !important;
+    --pp-rafaga: 0deg !important;
+    --pp-canto: 1 !important;
+  }
   .patrio-cohetes { display: none; }
 }

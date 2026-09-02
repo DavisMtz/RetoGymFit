@@ -22,6 +22,9 @@ const reducido = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').m
 function Campana() {
   return (
     <svg className="patrio-emblema" viewBox="0 0 96 96" fill="none" focusable="false" aria-hidden="true">
+      {/* Las ondas del repique: salen en cada campanada y se apagan solas */}
+      <circle data-onda cx="48" cy="48" r="30" stroke={PALETA.oro} strokeWidth="1.6" opacity="0" />
+      <circle data-onda cx="48" cy="48" r="30" stroke="#ffffff" strokeWidth="1.2" opacity="0" />
       {/* Rayos de la fiesta */}
       {Array.from({ length: 8 }, (_, i) => {
         const a = (Math.PI / 4) * i - Math.PI / 2;
@@ -30,27 +33,33 @@ function Campana() {
           <line
             key={i}
             data-trazo
+            data-rayo
             x1={48 + Math.cos(a) * 33} y1={46 + Math.sin(a) * 33}
             x2={48 + Math.cos(a) * 42} y2={46 + Math.sin(a) * 42}
             stroke={c} strokeWidth="3" strokeLinecap="round"
           />
         );
       })}
-      {/* Cuerpo de la campana */}
-      <path
-        data-trazo
-        d="M32 62 Q32 34 48 30 Q64 34 64 62"
-        stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"
-      />
-      <path data-trazo d="M27 62 H69" stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" />
-      <path data-trazo d="M48 30 V24" stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" />
-      {/* Badajo y remate */}
-      <circle data-relleno cx="48" cy="68" r="4" fill={PALETA.oro} />
+      {/* El remate NO se mece: es de donde cuelga la campana */}
       <circle data-relleno cx="48" cy="22" r="3.2" fill={PALETA.verdeVivo} />
-      {/* Franjas de la bandera en la falda */}
-      <rect data-relleno x="34" y="55" width="9" height="4" rx="1.4" fill={PALETA.verdeVivo} />
-      <rect data-relleno x="44" y="55" width="9" height="4" rx="1.4" fill="#ffffff" />
-      <rect data-relleno x="54" y="55" width="8" height="4" rx="1.4" fill={PALETA.rojoVivo} />
+      {/* Todo lo que cuelga del yugo, que es lo que repica */}
+      <g data-campana>
+        <path
+          data-trazo
+          d="M32 62 Q32 34 48 30 Q64 34 64 62"
+          stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"
+        />
+        <path data-trazo d="M27 62 H69" stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" />
+        <path data-trazo d="M48 30 V24" stroke={PALETA.oro} strokeWidth="3.4" strokeLinecap="round" />
+        {/* Franjas de la bandera en la falda */}
+        <rect data-relleno x="34" y="55" width="9" height="4" rx="1.4" fill={PALETA.verdeVivo} />
+        <rect data-relleno x="44" y="55" width="9" height="4" rx="1.4" fill="#ffffff" />
+        <rect data-relleno x="54" y="55" width="8" height="4" rx="1.4" fill={PALETA.rojoVivo} />
+        {/* El badajo va aparte: llega tarde al golpe, y esa demora es la campana */}
+        <g data-badajo>
+          <circle data-relleno cx="48" cy="68" r="4" fill={PALETA.oro} />
+        </g>
+      </g>
     </svg>
   );
 }
@@ -72,7 +81,7 @@ export default function PatrioBienvenida({ onCerrar }) {
 
   useEffect(() => {
     if (!visible) return undefined;
-    trazarEmblema(svgRef.current);
+    const pararEmblema = trazarEmblema(svgRef.current);
     if (!reducido()) {
       confetti({
         particleCount: 70,
@@ -84,7 +93,7 @@ export default function PatrioBienvenida({ onCerrar }) {
     }
     // La noche del Grito, además, cohetes de fondo.
     const parar = esGrito ? cohetesDelGrito(canvasRef.current, CONFETI_PATRIO) : null;
-    return () => { if (parar) parar(); };
+    return () => { if (pararEmblema) pararEmblema(); if (parar) parar(); };
   }, [visible, esGrito]);
 
   function cerrar(irAPerfil) {
