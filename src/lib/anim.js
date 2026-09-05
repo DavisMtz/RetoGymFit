@@ -1,20 +1,59 @@
 /**
- * Animaciones con GSAP 3.13.
+ * SISTEMA DE MOVIMIENTO — GSAP 3.13
  *
- * Centraliza los efectos de la app para que se sientan consistentes:
- *  - entradaPagina: transición al cambiar de pestaña (fade + rise con stagger)
- *  - abrirLightbox: zoom elástico del visor de fotos
- *  - entradaPodio: los 3 lugares suben con rebote (oro al último para el drama)
+ * Un solo archivo manda sobre todo lo que se mueve en la app, para que las
+ * seis pantallas se sientan la misma app y no seis demos distintas.
  *
- * Todo respeta prefers-reduced-motion: si está activo, los elementos
- * simplemente aparecen sin movimiento.
+ * Tres reglas que valen para TODO lo de aquí abajo:
+ *
+ *  1. NINGUNA animación es lo único que hace visible algo. Los reveals usan
+ *     `from` (el estado natural del elemento ES el final) o `fromTo` con
+ *     destino explícito y `clearProps`. Si GSAP no llegara a correr, el
+ *     contenido simplemente está ahí. Y lo que sí nace oculto lleva red de
+ *     seguridad: `blindar()` lo termina aunque el navegador congele el rAF
+ *     con la pestaña en segundo plano.
+ *  2. `prefers-reduced-motion` se respeta arriba de todo, en `reducido()`.
+ *     Cuando está activo no se anima: se pone el estado final y ya.
+ *  3. Las curvas son las MISMAS del CSS. `--spring`, `--spring-soft`,
+ *     `--soft` y `--smooth` viven aquí como eases de GSAP con los mismos
+ *     números, así que una tarjeta que entra con JS y otra que responde con
+ *     `transition` se mueven igual. Es la diferencia entre "tiene
+ *     animaciones" y "está animada".
  */
 import { gsap } from 'gsap';
 import { Flip } from 'gsap/Flip';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { SplitText } from 'gsap/SplitText';
+import { DrawSVGPlugin } from 'gsap/DrawSVGPlugin';
+import { Physics2DPlugin } from 'gsap/Physics2DPlugin';
+import { CustomEase } from 'gsap/CustomEase';
+import { CustomWiggle } from 'gsap/CustomWiggle';
 
-gsap.registerPlugin(Flip);
+gsap.registerPlugin(Flip, ScrollTrigger, SplitText, DrawSVGPlugin, Physics2DPlugin, CustomEase, CustomWiggle);
 
-const reducido = () =>
+// El teléfono esconde y saca la barra de direcciones al hacer scroll: sin
+// esto, ScrollTrigger recalcularía todo en cada uno de esos cambios de alto.
+ScrollTrigger.config({ ignoreMobileResize: true });
+
+/* ── Las curvas del sistema de diseño, tal cual están en global.css ────── */
+CustomEase.create('rgf-spring', '0.34,1.56,0.64,1');      // --spring
+CustomEase.create('rgf-spring-soft', '0.16,1.2,0.3,1');   // --spring-soft
+CustomEase.create('rgf-soft', '0.22,0.61,0.36,1');        // --soft
+CustomEase.create('rgf-smooth', '0.4,0,0.2,1');           // --smooth
+// Un tembleque decreciente para avisos (la franja de peligro, un error).
+CustomWiggle.create('rgf-tembleque', { wiggles: 7, type: 'easeOut' });
+
+export const EASE = {
+  spring: 'rgf-spring',
+  springSoft: 'rgf-spring-soft',
+  soft: 'rgf-soft',
+  smooth: 'rgf-smooth',
+  entrada: 'power3.out',
+  salida: 'power2.in',
+  tembleque: 'rgf-tembleque',
+};
+
+export const reducido = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // Capas flotantes que NUNCA deben entrar en la cascada de página:
@@ -22,9 +61,55 @@ const reducido = () =>
 // los haría parpadear al cambiar de sección.
 const SELECTOR_FLOTANTES = '.modal-overlay, .sheet-overlay, .lightbox, .toast, .instalar-banner, .celebra-overlay';
 
-/** Transición de página: los hijos directos del contenedor entran en cascada. */
-export function entradaPagina(contenedor) {
+/**
+ * Red de seguridad de una línea de tiempo que nace con el contenido oculto.
+ *
+ * El navegador congela `requestAnimationFrame` en pestañas de segundo plano
+ * —justo lo que pasa al abrir la app desde un enlace de WhatsApp—, así que
+ * una animación puede no llegar nunca a su último fotograma y dejar media
+ * pantalla invisible sin un solo error en consola. Aquí se fuerza el final
+ * si eso ocurre; el temporizador es el que garantiza, la animación solo
+ * decora. Devuelve la función de limpieza.
+ */
+function blindar(tl) {
+  const forzar = () => { if (tl.progress() < 1) tl.progress(1); };
+  const alCambiarVisibilidad = () => { if (document.hidden) forzar(); };
+  document.addEventListener('visibilitychange', alCambiarVisibilidad);
+  const reloj = setTimeout(forzar, (tl.totalDuration() + 1.2) * 1000);
+  if (document.hidden) forzar();
+  return () => {
+    clearTimeout(reloj);
+    document.removeEventListener('visibilitychange', alCambiarVisibilidad);
+    tl.kill();
+  };
+}
+
+/** Pausa un bucle infinito mientras la app está en un bolsillo. */
+function ahorrarEnSegundoPlano(...animaciones) {
+  const alCambiar = () => animaciones.forEach((a) => (document.hidden ? a.pause() : a.resume()));
+  document.addEventListener('visibilitychange', alCambiar);
+  return () => {
+    document.removeEventListener('visibilitychange', alCambiar);
+    animaciones.forEach((a) => a.kill());
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TRANSICIÓN DE PÁGINA
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Transición de página: los bloques de la pantalla entran en cascada.
+ *
+ * `direccion` (-1, 0, +1) es hacia dónde te moviste en la barra de pestañas.
+ * Con eso la pantalla nueva entra por el lado del que vienes, como en una
+ * app nativa: ir de Hoy a Ranking se siente "hacia la derecha" y volver se
+ * siente "hacia la izquierda". Sin dirección (llegar por un enlace) entra
+ * de abajo, que es la entrada neutral de siempre.
+ */
+export function entradaPagina(contenedor, opciones = {}) {
   if (!contenedor || reducido()) return undefined;
+  const { direccion = 0 } = opciones;
   const hijos = Array.from(contenedor.children)
     .filter((el) => !el.matches(SELECTOR_FLOTANTES))
     .slice(0, 10);
@@ -37,12 +122,388 @@ export function entradaPagina(contenedor) {
     0,
   ).fromTo(
     hijos,
-    { y: 22, opacity: 0 },
-    { y: 0, opacity: 1, duration: 0.55, ease: 'power3.out', stagger: 0.06, clearProps: 'transform,opacity' },
+    { y: direccion ? 10 : 22, x: direccion * 38, opacity: 0 },
+    {
+      y: 0,
+      x: 0,
+      opacity: 1,
+      duration: 0.62,
+      ease: EASE.entrada,
+      stagger: 0.055,
+      clearProps: 'transform,opacity',
+    },
     0,
   );
-  return () => tl.kill();
+  // Y dentro de cada bloque marcado con `.stagger`, una segunda cascada más
+  // corta: la pantalla llega en dos tiempos (los bloques, y lo de adentro),
+  // que es lo que separa una transición de un simple fundido.
+  const internos = interioresDeStagger(contenedor);
+  if (internos.length) {
+    tl.fromTo(
+      internos,
+      { y: 16, opacity: 0 },
+      {
+        y: 0, opacity: 1, duration: 0.5, ease: EASE.entrada,
+        stagger: 0.06, clearProps: 'transform,opacity',
+      },
+      0.14,
+    );
+  }
+  return blindar(tl);
 }
+
+/**
+ * Los hijos de los bloques `.stagger`, menos los titulares: esos tienen su
+ * propio revelado palabra por palabra y sumarle un desplazamiento del bloque
+ * entero convierte dos gestos claros en uno confuso.
+ */
+function interioresDeStagger(contenedor) {
+  if (!contenedor) return [];
+  const grupos = contenedor.matches?.('.stagger')
+    ? [contenedor]
+    : Array.from(contenedor.querySelectorAll('.stagger'));
+  return grupos.flatMap((g) => Array.from(g.children).filter((el) => el.dataset.anim !== 'titulo'));
+}
+
+/**
+ * Cascada suelta de los bloques `.stagger` de una pantalla que no pasa por
+ * la transición de página (el onboarding, que vive fuera del router).
+ */
+export function revelarBloques(contenedor, opciones = {}) {
+  if (!contenedor || reducido()) return undefined;
+  const { retraso = 0.05, cascada = 0.07 } = opciones;
+  const internos = interioresDeStagger(contenedor);
+  if (!internos.length) return undefined;
+  const tl = gsap.timeline();
+  tl.fromTo(
+    internos,
+    { y: 24, opacity: 0 },
+    {
+      y: 0, opacity: 1, duration: 0.65, delay: retraso, ease: EASE.entrada,
+      stagger: cascada, clearProps: 'transform,opacity',
+    },
+  );
+  return blindar(tl);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   REVELADOS — lo que aparece
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Titular partido en palabras que suben tras una máscara por línea.
+ *
+ * Es `from`, no `fromTo`: el destino es el estado natural del titular, así
+ * que si esto no corriera el texto ya está escrito y legible. `autoSplit`
+ * vuelve a partirlo cuando terminan de cargar las tipografías o cuando el
+ * teléfono gira — sin eso, el corte de líneas se calcula con la fuente de
+ * respaldo y las palabras quedan repartidas mal.
+ */
+export function revelarTitulo(el, opciones = {}) {
+  if (!el || reducido()) return undefined;
+  const { retraso = 0.1, duracion = 0.85, cascada = 0.055 } = opciones;
+  const particion = SplitText.create(el, {
+    type: 'lines,words',
+    mask: 'lines',
+    linesClass: 'anim-linea',
+    autoSplit: true,
+    onSplit: (self) => gsap.from(self.words, {
+      yPercent: 120,
+      opacity: 0,
+      duration: duracion,
+      delay: retraso,
+      ease: 'expo.out',
+      stagger: cascada,
+    }),
+  });
+  return () => particion.revert();
+}
+
+/**
+ * Revelado de listas largas (feed, historial, clasificación).
+ *
+ * Lo que YA se ve al montar entra en cascada de inmediato; lo que está más
+ * abajo se oculta y espera a que el scroll lo alcance. Esa división no es
+ * un capricho: si todo dependiera del scroll y ScrollTrigger fallara, la
+ * pantalla se quedaría en blanco. Así, lo que está a la vista no depende
+ * jamás de un evento de scroll.
+ *
+ * Marca cada elemento con `data-revelado` para no volver a revelar lo que
+ * ya entró: en el feed en vivo, cuando llega una publicación nueva solo se
+ * anima ella y las demás se quedan quietas.
+ */
+export function revelarLista(contenedor, selector, opciones = {}) {
+  if (!contenedor || reducido()) return undefined;
+  const { y = 24, duracion = 0.6, cascada = 0.07, retraso = 0 } = opciones;
+  const nuevos = gsap.utils
+    .toArray(contenedor.querySelectorAll(selector))
+    .filter((el) => !el.dataset.revelado);
+  if (!nuevos.length) return undefined;
+  nuevos.forEach((el) => { el.dataset.revelado = '1'; });
+
+  const alto = window.innerHeight || 800;
+  const aLaVista = [];
+  const porLlegar = [];
+  nuevos.forEach((el) => {
+    (el.getBoundingClientRect().top < alto * 0.92 ? aLaVista : porLlegar).push(el);
+  });
+
+  let entrada;
+  if (aLaVista.length) {
+    entrada = gsap.fromTo(
+      aLaVista,
+      { y, opacity: 0 },
+      {
+        y: 0, opacity: 1, duration: duracion, delay: retraso, ease: EASE.entrada,
+        stagger: cascada, clearProps: 'transform,opacity',
+      },
+    );
+  }
+
+  let disparadores = [];
+  if (porLlegar.length) {
+    gsap.set(porLlegar, { y, opacity: 0 });
+    disparadores = ScrollTrigger.batch(porLlegar, {
+      start: 'top 93%',
+      once: true,
+      onEnter: (lote) => gsap.to(lote, {
+        y: 0, opacity: 1, duration: duracion, ease: EASE.entrada,
+        stagger: cascada, clearProps: 'transform,opacity',
+      }),
+    });
+  }
+
+  return () => {
+    entrada?.kill();
+    disparadores.forEach((d) => d.kill());
+    // Al desmontar, nada puede quedarse invisible esperando un scroll.
+    if (porLlegar.length) gsap.set(porLlegar, { clearProps: 'transform,opacity' });
+  };
+}
+
+/**
+ * Un bloque que se anima cuando el scroll lo alcanza (las barras de Stats).
+ * `alEntrar` recibe el elemento; si ya está a la vista, corre de inmediato.
+ */
+export function alAsomarse(el, alEntrar, opciones = {}) {
+  if (!el) return undefined;
+  if (reducido()) { alEntrar(el); return undefined; }
+  const { inicio = 'top 88%' } = opciones;
+  const disparador = ScrollTrigger.create({
+    trigger: el,
+    start: inicio,
+    once: true,
+    onEnter: () => alEntrar(el),
+  });
+  return () => disparador.kill();
+}
+
+/**
+ * Barras de progreso (semana, kcal por tipo, equipo de hoy).
+ *
+ * GSAP es el dueño de estas medidas — por eso en el CSS ya no llevan
+ * `transition`: dos motores animando la misma propiedad se pisan y el
+ * resultado es un tirón. El porcentaje llega como número, no como estilo en
+ * línea, para que al cambiar el valor la barra viaje desde donde estaba y
+ * no desde cero.
+ */
+export function animarBarra(el, porcentaje, opciones = {}) {
+  if (!el) return;
+  const { propiedad = 'width', duracion = 1.1, retraso = 0, ease = EASE.springSoft } = opciones;
+  const destino = `${Math.max(0, Math.min(100, porcentaje || 0))}%`;
+  if (reducido()) { gsap.set(el, { [propiedad]: destino }); return; }
+  gsap.to(el, { [propiedad]: destino, duration: duracion, delay: retraso, ease, overwrite: 'auto' });
+}
+
+/** Contador numérico. Devuelve el tween para poder matarlo al desmontar. */
+export function contarHasta(desde, hasta, duracion, alActualizar, opciones = {}) {
+  const { ease = 'power2.out', salto = 0 } = opciones;
+  if (reducido()) { alActualizar(hasta); return null; }
+  const proxy = { v: desde };
+  return gsap.to(proxy, {
+    v: hasta,
+    duration: duracion,
+    ease,
+    ...(salto ? { snap: { v: salto } } : {}),
+    onUpdate: () => alActualizar(proxy.v),
+    onComplete: () => alActualizar(hasta),
+  });
+}
+
+/**
+ * Trazo de un SVG dibujándose (los palomeos de "misión cumplida").
+ * También termina en el estado natural: si no corre, la palomita está
+ * completa desde el principio.
+ */
+export function dibujarTrazo(contenedor, opciones = {}) {
+  if (!contenedor || reducido()) return;
+  const { duracion = 0.55, retraso = 0.15, cascada = 0.08, ease = 'power2.inOut' } = opciones;
+  const trazos = contenedor.querySelectorAll('path, polyline, line');
+  if (!trazos.length) return;
+  gsap.fromTo(
+    trazos,
+    { drawSVG: '0%' },
+    { drawSVG: '100%', duration: duracion, delay: retraso, ease, stagger: cascada },
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MICRO-INTERACCIONES — lo que responde al dedo
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Micro-interacción "punch": el elemento late al tocarlo (reacciones, tabs). */
+export function punch(el, escala = 1.25) {
+  if (!el || reducido()) return;
+  gsap.fromTo(el, { scale: 1 }, {
+    scale: escala,
+    duration: 0.16,
+    ease: EASE.spring,
+    yoyo: true,
+    repeat: 1,
+    transformOrigin: 'center',
+    overwrite: 'auto',
+    onComplete: () => gsap.set(el, { clearProps: 'transform' }),
+  });
+}
+
+/** Aviso que pide atención sin gritar: tembleque corto y decreciente. */
+export function sacudir(el, opciones = {}) {
+  if (!el || reducido()) return;
+  const { fuerza = 8, duracion = 0.7 } = opciones;
+  gsap.fromTo(el, { x: 0 }, {
+    x: fuerza,
+    duration: duracion,
+    ease: EASE.tembleque,
+    overwrite: 'auto',
+    onComplete: () => gsap.set(el, { clearProps: 'transform' }),
+  });
+}
+
+/**
+ * La llama de la racha. El CSS solo le bajaba la opacidad; una llama de
+ * verdad además se estira y se ladea, y nunca repite el mismo ciclo — de
+ * ahí `repeatRefresh` con valores al azar en cada vuelta.
+ */
+export function encenderLlama(el) {
+  if (!el || reducido()) return undefined;
+  const tl = gsap.timeline({ repeat: -1, repeatRefresh: true, defaults: { ease: 'sine.inOut' } })
+    .to(el, {
+      scaleY: () => gsap.utils.random(1.06, 1.2),
+      scaleX: () => gsap.utils.random(0.92, 0.99),
+      rotate: () => gsap.utils.random(-6, 6),
+      opacity: () => gsap.utils.random(0.82, 1),
+      duration: () => gsap.utils.random(0.28, 0.5),
+      transformOrigin: '50% 100%',
+    })
+    .to(el, {
+      scaleY: 1, scaleX: 1, rotate: 0, opacity: 1,
+      duration: () => gsap.utils.random(0.24, 0.42),
+    });
+  return ahorrarEnSegundoPlano(tl);
+}
+
+/** Capa compartida para lo que se dibuja fuera del flujo (partículas, ondas). */
+function capaEfimera() {
+  const capa = document.createElement('div');
+  capa.className = 'particulas-capa';
+  capa.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(capa);
+  return capa;
+}
+
+/**
+ * Anillo que se expande desde el elemento tocado: confirma el toque con luz
+ * en vez de con otro rebote. Se usa donde el gesto importa (chocar los
+ * cinco, reaccionar, cerrar la semana).
+ */
+export function chispazo(el, opciones = {}) {
+  if (!el || reducido()) return;
+  const { color = 'var(--acc)', anillos = 2, tamano = 1 } = opciones;
+  const r = el.getBoundingClientRect();
+  const capa = capaEfimera();
+  let vivos = anillos;
+  for (let i = 0; i < anillos; i += 1) {
+    const anillo = document.createElement('span');
+    anillo.className = 'chispazo-anillo';
+    anillo.style.borderColor = color;
+    capa.appendChild(anillo);
+    gsap.set(anillo, {
+      x: r.left + r.width / 2,
+      y: r.top + r.height / 2,
+      width: r.width,
+      height: r.height,
+      xPercent: -50,
+      yPercent: -50,
+      opacity: 0.85,
+      scale: 0.6,
+    });
+    gsap.to(anillo, {
+      scale: (2.1 + i * 0.9) * tamano,
+      opacity: 0,
+      duration: 0.55 + i * 0.18,
+      delay: i * 0.07,
+      ease: 'power2.out',
+      onComplete: () => { anillo.remove(); vivos -= 1; if (vivos === 0) capa.remove(); },
+    });
+  }
+  setTimeout(() => capa.remove(), 1600);
+}
+
+/**
+ * Explosión de partículas de emoji (estilo corazones de IG Live).
+ *
+ * Ahora salen disparadas con física de verdad (Physics2DPlugin): cada una
+ * lleva su velocidad y su ángulo, y la MISMA gravedad las va frenando y
+ * curvando. Antes viajaban en línea recta hasta un punto calculado, que es
+ * lo que las delataba como CSS. Con la parábola se leen como algo lanzado.
+ */
+export function particulasEmoji(el, emoji, cantidad = 6) {
+  if (!el || reducido()) return;
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  const capa = capaEfimera();
+  let vivas = cantidad;
+  for (let i = 0; i < cantidad; i += 1) {
+    const p = document.createElement('span');
+    p.className = 'particula-emoji';
+    p.textContent = emoji;
+    capa.appendChild(p);
+    gsap.set(p, { x: cx, y: cy, scale: gsap.utils.random(0.6, 1.15), opacity: 1 });
+    const duracion = gsap.utils.random(0.85, 1.25);
+    const retraso = i * 0.04;
+    gsap.to(p, {
+      duration: duracion,
+      delay: retraso,
+      ease: 'none',
+      physics2D: {
+        velocity: gsap.utils.random(210, 340),
+        angle: gsap.utils.random(-118, -62),   // hacia arriba, en abanico
+        gravity: 520,
+      },
+      rotation: gsap.utils.random(-50, 50),
+    });
+    gsap.to(p, {
+      scale: gsap.utils.random(1.15, 1.7),
+      duration: duracion * 0.45,
+      delay: retraso,
+      ease: 'power2.out',
+    });
+    gsap.to(p, {
+      opacity: 0,
+      duration: duracion * 0.5,
+      delay: retraso + duracion * 0.5,
+      ease: 'power1.in',
+      onComplete: () => { p.remove(); vivas -= 1; if (vivas === 0) capa.remove(); },
+    });
+  }
+  // Red de seguridad por si alguna animación se interrumpe (cambio de página)
+  setTimeout(() => capa.remove(), 2400);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOMENTOS — las escenas con guion
+   ═══════════════════════════════════════════════════════════════════════ */
 
 /** Apertura del lightbox: la foto entra con zoom elástico y el pie sube. */
 export function abrirLightbox(img, caption) {
@@ -55,27 +516,87 @@ export function abrirLightbox(img, caption) {
   }
 }
 
-/** Podio: plata y bronce suben primero, el oro cae al final con rebote. */
+/** Apertura del visor de avatar: zoom elástico de la foto + nombre. */
+export function abrirAvatar(el, nombre) {
+  if (reducido()) return;
+  if (el) gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.8)' });
+  if (nombre) gsap.fromTo(nombre, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, delay: 0.1, ease: 'power2.out' });
+}
+
+/**
+ * El podio.
+ *
+ * El orden en pantalla es 2º — 1º — 3º, así que animarlos en el orden del
+ * DOM dejaba al oro en medio de la cascada. Aquí se llaman por su lugar: la
+ * plata, luego el bronce, y el oro AL FINAL, desde más abajo y con más
+ * rebote. Después cae la corona y la medalla gira al aterrizar. El drama
+ * está en el orden, no en la duración.
+ */
 export function entradaPodio(contenedor) {
   if (!contenedor || reducido()) return undefined;
   const cols = contenedor.querySelectorAll('.podium-col');
   if (!cols.length) return undefined;
-  const tl = gsap.timeline();
-  tl.fromTo(
-    cols,
-    { y: 44, opacity: 0, scale: 0.9 },
-    {
-      y: 0, opacity: 1, scale: 1, duration: 0.7, ease: 'back.out(1.7)',
-      // orden visual: 2º, 3º y el 1º al final
-      stagger: { each: 0.14, from: 'start' },
-      clearProps: 'transform,opacity',
-    },
-  );
+  const porLugar = (n) => contenedor.querySelector(`.podium-col.p-${n}`);
+  const secundarios = [porLugar(2), porLugar(3)].filter(Boolean);
+  const oro = porLugar(1);
+
+  const tl = gsap.timeline({ defaults: { ease: EASE.entrada } });
+
+  if (secundarios.length) {
+    tl.fromTo(
+      secundarios,
+      { y: 46, opacity: 0, scale: 0.9 },
+      {
+        y: 0, opacity: 1, scale: 1, duration: 0.65, ease: 'back.out(1.6)',
+        stagger: 0.12, clearProps: 'transform,opacity',
+      },
+      0,
+    );
+  }
+  if (oro) {
+    tl.fromTo(
+      oro,
+      { y: 64, opacity: 0, scale: 0.86 },
+      { y: 0, opacity: 1, scale: 1, duration: 0.9, ease: 'back.out(2)', clearProps: 'transform,opacity' },
+      0.26,
+    );
+  }
+
+  // La base crece desde el suelo: es un pedestal, no una tarjeta.
+  const bases = contenedor.querySelectorAll('.podium-base');
+  if (bases.length) {
+    tl.fromTo(
+      bases,
+      { scaleY: 0.15, transformOrigin: '50% 100%' },
+      { scaleY: 1, duration: 0.55, ease: EASE.springSoft, stagger: 0.08, clearProps: 'transform' },
+      0.3,
+    );
+  }
+
+  const medallas = contenedor.querySelectorAll('.podium-medal');
+  if (medallas.length) {
+    tl.fromTo(
+      medallas,
+      { rotateY: -180, scale: 0.5, opacity: 0 },
+      {
+        rotateY: 0, scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(1.8)',
+        stagger: 0.1, clearProps: 'transform,opacity',
+      },
+      0.52,
+    );
+  }
+
   const corona = contenedor.querySelector('.podium-crown');
   if (corona) {
-    tl.fromTo(corona, { y: -26, opacity: 0, rotate: -18 }, { y: 0, opacity: 1, rotate: 0, duration: 0.5, ease: 'bounce.out' }, '-=0.2');
+    tl.fromTo(
+      corona,
+      { y: -32, opacity: 0, rotate: -24, scale: 0.7 },
+      { y: 0, opacity: 1, rotate: 0, scale: 1, duration: 0.75, ease: 'bounce.out', clearProps: 'transform,opacity' },
+      0.78,
+    );
   }
-  return () => tl.kill();
+
+  return blindar(tl);
 }
 
 /** Entrada del banner de instalación: se asoma desde abajo con rebote suave. */
@@ -88,26 +609,190 @@ export function entradaBanner(el) {
 export function salidaBanner(el) {
   if (!el || reducido()) return Promise.resolve();
   return new Promise((resolve) => {
-    gsap.to(el, { y: 110, opacity: 0, duration: 0.35, ease: 'power2.in', onComplete: resolve });
+    gsap.to(el, { y: 110, opacity: 0, duration: 0.35, ease: EASE.salida, onComplete: resolve });
   });
 }
 
-/** Micro-interacción "punch": el elemento late al tocarlo (reacciones, tabs). */
-export function punch(el, escala = 1.25) {
-  if (!el || reducido()) return;
-  gsap.fromTo(el, { scale: 1 }, {
-    scale: escala, duration: 0.14, ease: 'power2.out',
-    yoyo: true, repeat: 1, transformOrigin: 'center',
-    onComplete: () => gsap.set(el, { clearProps: 'transform' }),
-  });
+/**
+ * La celebración de después de registrar el día — el momento que la gente
+ * va a ver todos los días, así que es el que más se cuidó.
+ *
+ * El guion: el disco aterriza girando y suelta una onda; el titular entra
+ * palabra por palabra; las cifras y la semana llegan detrás; los botones al
+ * final, cuando ya leíste. Cada pieza arranca ANTES de que termine la
+ * anterior: así son cuatro compases y no cuatro animaciones en fila.
+ */
+export function entradaCelebracion(overlay) {
+  if (!overlay || reducido()) return undefined;
+  const icono = overlay.querySelector('.celebra-icono');
+  const titulo = overlay.querySelector('.celebra-titulo');
+  const bloques = overlay.querySelectorAll('.celebra-anim:not(.celebra-titulo)');
+  const puntos = overlay.querySelectorAll('.week-dot-circle');
+
+  const tl = gsap.timeline({ defaults: { ease: EASE.entrada } });
+
+  if (icono) {
+    tl.fromTo(
+      icono,
+      { scale: 0, rotate: -35 },
+      { scale: 1, rotate: 0, duration: 0.75, ease: 'back.out(2.4)' },
+      0,
+    );
+    // La onda sale cuando el disco ya aterrizó, no mientras cae.
+    tl.call(() => chispazo(icono, { anillos: 2, tamano: 1.15 }), null, 0.42);
+  }
+
+  let particion;
+  if (titulo) {
+    particion = SplitText.create(titulo, { type: 'words' });
+    tl.from(particion.words, { yPercent: 60, opacity: 0, duration: 0.5, stagger: 0.06 }, 0.3);
+  }
+
+  if (bloques.length) {
+    tl.fromTo(
+      bloques,
+      { y: 26, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.5, stagger: 0.09, clearProps: 'transform,opacity' },
+      0.42,
+    );
+  }
+
+  // La semana se enciende día por día: es el resumen de por qué estás aquí.
+  if (puntos.length) {
+    tl.fromTo(
+      puntos,
+      { scale: 0.3, opacity: 0 },
+      {
+        scale: 1, opacity: 1, duration: 0.42, ease: 'back.out(2.6)',
+        stagger: 0.055, clearProps: 'transform,opacity',
+      },
+      0.62,
+    );
+  }
+
+  const cerrar = blindar(tl);
+  return () => { cerrar(); particion?.revert(); };
 }
 
-/** Apertura del visor de avatar: zoom elástico de la foto + nombre. */
-export function abrirAvatar(el, nombre) {
-  if (reducido()) return;
-  if (el) gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.8)' });
-  if (nombre) gsap.fromTo(nombre, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, delay: 0.1, ease: 'power2.out' });
+/**
+ * Intro cinemática de bienvenida (estilo anime).
+ *
+ * Antes eran cinco `@keyframes` de CSS corriendo en paralelo y confiando en
+ * que coincidieran. Aquí es UNA línea de tiempo: el corte de luz, el
+ * impacto del nombre letra por letra, el rebote del bloque y el fundido de
+ * salida caen donde deben porque están en la misma regla.
+ *
+ * `alTerminar` se dispara al cerrar el telón, pero quien manda es el
+ * temporizador de quien la monta: la animación decora, el reloj garantiza
+ * que nadie se quede encerrado en la intro.
+ */
+export function introCinematica(raiz, alTerminar) {
+  if (!raiz) return undefined;
+  const titulo = raiz.querySelector('.anime-title');
+  const subtitulo = raiz.querySelector('.anime-subtitle');
+  const corte = raiz.querySelector('.anime-slash');
+  const lineas = raiz.querySelector('.anime-bg-lines');
+  const contenido = raiz.querySelector('.anime-content');
+
+  if (reducido()) {
+    gsap.set([titulo, subtitulo].filter(Boolean), { opacity: 1, clipPath: 'none' });
+    return undefined;
+  }
+
+  // El CSS trae su propia versión de esta intro para el caso reducido; con
+  // GSAP al mando se apaga, para que no peleen por las mismas propiedades.
+  raiz.classList.add('intro-js');
+
+  const particion = titulo ? SplitText.create(titulo, { type: 'chars,words' }) : null;
+  const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+  if (lineas) {
+    tl.fromTo(lineas, { opacity: 0, scale: 1.35 }, { opacity: 0.4, scale: 1, duration: 0.7, ease: 'power2.out' }, 0);
+    tl.to(lineas, { rotate: 360, duration: 26, ease: 'none', repeat: -1 }, 0);
+  }
+
+  if (corte) {
+    // El rotate va explícito en los dos extremos: el CSS deja el corte en
+    // `rotate(-10deg) scaleX(0)` y de una matriz con escala cero no se puede
+    // recuperar el giro — GSAP lo enderezaría y el tajo saldría horizontal.
+    tl.fromTo(
+      corte,
+      { scaleX: 0, rotate: -10, transformOrigin: 'left center', opacity: 1 },
+      { scaleX: 1, rotate: -10, duration: 0.26, ease: 'power4.in' },
+      0.08,
+    )
+      .set(corte, { transformOrigin: 'right center' }, 0.34)
+      .to(corte, { scaleX: 0, opacity: 0, duration: 0.32, ease: 'power2.out' }, 0.34);
+  }
+
+  if (particion) {
+    tl.fromTo(
+      particion.chars,
+      { opacity: 0, scale: 2.6, y: 18, rotate: () => gsap.utils.random(-14, 14) },
+      {
+        opacity: 1, scale: 1, y: 0, rotate: 0,
+        duration: 0.55, ease: 'back.out(1.9)', stagger: 0.035,
+      },
+      0.3,
+    );
+  }
+  if (contenido) {
+    // El golpe: el bloque entero se comprime un instante al aterrizar.
+    // `skewY` explícito por lo mismo: el bloque viene inclinado desde el CSS
+    // y sin decírselo a GSAP se enderezaría al primer fotograma.
+    tl.fromTo(contenido, { scale: 1.07, skewY: -6 }, { scale: 1, skewY: -6, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, 0.6);
+  }
+
+  if (subtitulo) {
+    tl.fromTo(
+      subtitulo,
+      { opacity: 1, clipPath: 'inset(0 100% 0 0)', x: -18 },
+      { clipPath: 'inset(0 -10% 0 -10%)', x: 0, duration: 0.6, ease: 'power3.inOut' },
+      0.95,
+    );
+  }
+
+  // Telón: la pantalla se va hacia adelante, como un corte de cámara.
+  tl.to(raiz, { opacity: 0, scale: 1.06, duration: 0.6, ease: 'power2.in', onComplete: alTerminar }, 2.75);
+
+  const cerrar = blindar(tl);
+  return () => { cerrar(); particion?.revert(); };
 }
+
+/**
+ * La pastilla que sigue a la pestaña activa en la barra inferior.
+ *
+ * Es UN elemento que viaja, no seis fondos que se encienden: por eso la
+ * navegación se lee como un objeto que se mueve y no como un parpadeo. Se
+ * aplasta al salir y recupera la forma al llegar — squash & stretch de
+ * toda la vida, en 45 centésimas.
+ */
+export function moverIndicadorTabs(pastilla, activo, instantaneo = false) {
+  if (!pastilla || !activo) return;
+  const padre = pastilla.parentElement;
+  if (!padre) return;
+  const r = activo.getBoundingClientRect();
+  const rp = padre.getBoundingClientRect();
+  if (!r.width) return;
+  const destino = {
+    x: r.left - rp.left,
+    y: r.top - rp.top,
+    width: r.width,
+    height: r.height,
+    opacity: 1,
+  };
+  if (instantaneo || reducido()) { gsap.set(pastilla, destino); return; }
+  gsap.to(pastilla, { ...destino, duration: 0.45, ease: EASE.springSoft, overwrite: 'auto' });
+  gsap.fromTo(
+    pastilla,
+    { scaleY: 0.82, scaleX: 1.05 },
+    { scaleY: 1, scaleX: 1, duration: 0.55, ease: 'elastic.out(1, 0.55)', overwrite: 'auto' },
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FLIP — listas que se reordenan
+   ═══════════════════════════════════════════════════════════════════════ */
 
 /**
  * FLIP de listas (ranking): captura las posiciones ANTES de mutar el estado
@@ -129,74 +814,13 @@ export function capturarFlip(contenedor) {
 export function animarFlip(estado) {
   if (!estado || reducido()) return;
   Flip.from(estado, {
-    duration: 0.6,
-    ease: 'power3.inOut',
+    duration: 0.65,
+    ease: EASE.springSoft,
     stagger: 0.02,
     onEnter: (els) => gsap.fromTo(els, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4 }),
     onLeave: (els) => gsap.to(els, { opacity: 0, duration: 0.25 }),
   });
 }
-
-/**
- * Explosión de partículas de emoji (estilo corazones de IG Live): copias del
- * emoji salen flotando desde el elemento tocado y se desvanecen. Los spans
- * viven en un portal propio en el body y se limpian solos al terminar.
- */
-export function particulasEmoji(el, emoji, cantidad = 6) {
-  if (!el || reducido()) return;
-  const r = el.getBoundingClientRect();
-  const cx = r.left + r.width / 2;
-  const cy = r.top + r.height / 2;
-  const capa = document.createElement('div');
-  capa.className = 'particulas-capa';
-  capa.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(capa);
-  let vivas = cantidad;
-  for (let i = 0; i < cantidad; i++) {
-    const p = document.createElement('span');
-    p.className = 'particula-emoji';
-    p.textContent = emoji;
-    capa.appendChild(p);
-    const angulo = (-90 + gsap.utils.random(-55, 55)) * (Math.PI / 180);
-    const distancia = gsap.utils.random(52, 110);
-    gsap.set(p, { x: cx, y: cy, scale: gsap.utils.random(0.6, 1.15), opacity: 1 });
-    gsap.to(p, {
-      x: cx + Math.cos(angulo) * distancia,
-      y: cy + Math.sin(angulo) * distancia,
-      rotation: gsap.utils.random(-40, 40),
-      scale: gsap.utils.random(1.1, 1.7),
-      opacity: 0,
-      duration: gsap.utils.random(0.7, 1.1),
-      delay: i * 0.04,
-      ease: 'power2.out',
-      onComplete: () => { p.remove(); if (--vivas === 0) capa.remove(); },
-    });
-  }
-  // Red de seguridad por si alguna animación se interrumpe (cambio de página)
-  setTimeout(() => capa.remove(), 2000);
-}
-
-/** Entrada de la celebración post-registro: check, racha y bloques en cascada. */
-export function entradaCelebracion(overlay) {
-  if (!overlay) return;
-  if (reducido()) return;
-  const icono = overlay.querySelector('.celebra-icono');
-  const bloques = overlay.querySelectorAll('.celebra-anim');
-  const tl = gsap.timeline();
-  if (icono) {
-    tl.fromTo(icono, { scale: 0, rotation: -30 }, { scale: 1, rotation: 0, duration: 0.6, ease: 'back.out(2.2)' });
-  }
-  if (bloques.length) {
-    tl.fromTo(
-      bloques,
-      { y: 24, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out', stagger: 0.1, clearProps: 'transform,opacity' },
-      '-=0.25',
-    );
-  }
-  return () => tl.kill();
-}
-
 /* ═══════════════════════════════════════════════════════════════════════
    TEMA PATRIO — septiembre
    ═══════════════════════════════════════════════════════════════════════ */

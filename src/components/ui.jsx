@@ -1,10 +1,14 @@
 /** Componentes de UI compartidos */
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  createContext, useContext, useState, useCallback, useRef, useEffect, useLayoutEffect,
+} from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { DIAS_CORTOS, hoyMX, semanaISO, diasHasta } from '../lib/dates';
-import { abrirAvatar, punch } from '../lib/anim';
+import {
+  abrirAvatar, punch, contarHasta, moverIndicadorTabs, introCinematica, revelarSemana,
+} from '../lib/anim';
 import ReglasSheet from './Reglas';
 import NotiCampana from './Notificaciones';
 
@@ -123,21 +127,25 @@ export function Header({ reto }) {
   );
 }
 
-/** Número animado: sube con easing hasta el valor final (respeta reduced-motion). */
+/**
+ * Número animado: sube con easing hasta el valor final.
+ *
+ * Lo mueve GSAP, no un `requestAnimationFrame` a mano, por dos razones que
+ * se notan: cuando el valor cambia a media cuenta (el bote al refrescar) la
+ * cifra sigue desde donde iba en vez de saltar a cero, y la curva es la
+ * misma que la del resto de la app. `reducido()` lo resuelve dentro de
+ * `contarHasta`: sin movimiento, el número aparece ya puesto.
+ */
 export function useCountUp(value, duracion = 1300) {
   const [mostrado, setMostrado] = useState(0);
+  const actual = useRef(0);
   useEffect(() => {
     if (value == null) return undefined;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setMostrado(value); return undefined; }
-    let raf;
-    const inicio = performance.now();
-    const tick = (ahora) => {
-      const p = Math.min((ahora - inicio) / duracion, 1);
-      setMostrado(value * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const tween = contarHasta(actual.current, value, duracion / 1000, (v) => {
+      actual.current = v;
+      setMostrado(v);
+    });
+    return () => tween?.kill();
   }, [value, duracion]);
   return value == null ? null : mostrado;
 }
@@ -219,10 +227,18 @@ export function Countdown({ reto }) {
 
 // ——————————————————————————————— Week dots
 
-export function WeekDots({ semana }) {
+/**
+ * Los siete días de la semana. Se encienden de lunes a domingo con GSAP —
+ * antes era un `animation-delay` por punto en el CSS, que no se podía
+ * retrasar desde fuera: en la celebración los puntos ya habían terminado su
+ * entrada antes de que el modal acabara de abrirse.
+ */
+export function WeekDots({ semana, retraso = 0 }) {
   const hoy = hoyMX();
+  const ref = useRef(null);
+  useEffect(() => revelarSemana(ref.current, { retraso }), [semana, retraso]);
   return (
-    <div className="week-dots">
+    <div className="week-dots" ref={ref}>
       {semana.map((d, i) => {
         let cls = 'week-dot-circle';
         if (d.estatus === 'CUMPLE') cls += ' cumple';
@@ -231,7 +247,7 @@ export function WeekDots({ semana }) {
         if (d.fecha === hoy) cls += ' hoy';
         return (
           <div className="week-dot" key={d.fecha}>
-            <div className={cls} style={{ animationDelay: `${i * 0.06}s` }} />
+            <div className={cls} />
             <span className="week-dot-label">{DIAS_CORTOS[i]}</span>
           </div>
         );
@@ -251,10 +267,46 @@ const TABS = [
   { to: '/perfil', label: 'Perfil', icon: <path d="M20 21a8 8 0 10-16 0M12 11a4 4 0 100-8 4 4 0 000 8z" /> },
 ];
 
+/**
+ * Barra de pestañas con pastilla viajera.
+ *
+ * El fondo de la pestaña activa dejó de ser un color que se enciende y se
+ * apaga: ahora es UN elemento que se desplaza hasta donde tocaste, se
+ * aplasta al salir y recupera la forma al llegar. Es el detalle que hace
+ * que la navegación se sienta de app y no de página web.
+ *
+ * `useLayoutEffect` y no `useEffect`: la medida se toma después de que el
+ * DOM ya está pintado, antes de que el navegador lo muestre — así el primer
+ * posicionamiento no se ve pasar.
+ */
 export function TabBar() {
+  const barra = useRef(null);
+  const pastilla = useRef(null);
+  const primera = useRef(true);
+  const { pathname } = useLocation();
+
+  const recolocar = useCallback((instantaneo) => {
+    const activo = barra.current?.querySelector('.tab-item.active');
+    moverIndicadorTabs(pastilla.current, activo, instantaneo);
+  }, []);
+
+  useLayoutEffect(() => {
+    recolocar(primera.current);
+    primera.current = false;
+  }, [pathname, recolocar]);
+
+  // Al girar el teléfono las pestañas cambian de ancho: la pastilla se
+  // recoloca sin animación, porque ahí no hay un gesto que acompañar.
+  useEffect(() => {
+    const alRedimensionar = () => recolocar(true);
+    window.addEventListener('resize', alRedimensionar);
+    return () => window.removeEventListener('resize', alRedimensionar);
+  }, [recolocar]);
+
   return (
     <nav className="tabbar">
-      <div className="tabbar-inner">
+      <div className="tabbar-inner" ref={barra}>
+        <span className="tab-pill" ref={pastilla} aria-hidden="true" />
         {TABS.map((t) => (
           <NavLink
             key={t.to}
@@ -470,14 +522,19 @@ const FRASES_INTRO = [
 
 export function AnimeIntro({ nombre, genero, onDone }) {
   const [frase] = useState(() => FRASES_INTRO[Math.floor(Math.random() * FRASES_INTRO.length)]);
+  const raiz = useRef(null);
   useEffect(() => {
     vibrate([40, 50, 40]);
+    const limpiar = introCinematica(raiz.current, onDone);
+    // El telón lo cierra la línea de tiempo, pero quien GARANTIZA que nadie
+    // se quede encerrado en la intro es este reloj: si la animación no
+    // corriera (pestaña en segundo plano, movimiento reducido), igual sales.
     const t = setTimeout(onDone, 3600);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); limpiar?.(); };
   }, [onDone]);
   const saludo = genero === 'a' ? '¡BIENVENIDA,' : '¡BIENVENIDX,';
   return (
-    <div className="anime-intro active">
+    <div className="anime-intro active" ref={raiz}>
       <div className="anime-bg-lines" />
       <div className="anime-slash" />
       <div className="anime-content">
