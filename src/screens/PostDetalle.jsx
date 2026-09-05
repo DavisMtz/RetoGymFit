@@ -22,7 +22,7 @@ import Comentarios, { hace } from '../components/Comentarios';
 import Lightbox from '../components/Lightbox';
 import { suscribirPost, reaccionarPost, obtenerUsuariosActivos } from '../data/queries';
 import { getReto } from '../config/retos';
-import { punch, particulasEmoji } from '../lib/anim';
+import { punch, particulasEmoji, chispazo } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
@@ -116,7 +116,10 @@ export default function PostDetalle() {
     if (!esParticipante) return;
     vibrate(18);
     if (el) punch(el, 1.35);
-    if (el && miReaccion !== emoji) particulasEmoji(el, emoji);
+    if (el && miReaccion !== emoji) {
+      chispazo(el, { anillos: 1, tamano: 1.5 });
+      particulasEmoji(el, emoji);
+    }
     try {
       await reaccionarPost(retoId, post, usuario, miReaccion === emoji ? null : emoji);
     } catch {

@@ -5,13 +5,14 @@
  *   3. Contraseña — si es tu primera vez la creas; si ya tienes, la ingresas.
  * Al entrar, la sesión queda guardada en el dispositivo.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { LISTA_RETOS } from '../config/retos';
 import { obtenerUsuariosActivos, obtenerUsuario } from '../data/queries';
 import { solicitarCodigo, verificarCodigo, mensajeDeError } from '../lib/recuperacion';
 import { obtenerUsuariosSheet, slugNombre } from '../lib/sheets';
 import { useAuth } from '../context/AuthContext';
 import { Avatar, vibrate, PeopleSkeleton } from '../components/ui';
+import { revelarTitulo, revelarBloques, revelarLista } from '../lib/anim';
 
 const IconSearch = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
@@ -124,6 +125,22 @@ export default function Onboarding() {
 
   const tienePass = Boolean(elegido?.hasPassword && elegido?.authUid);
 
+  // El onboarding vive fuera del router, así que no lo alcanza la transición
+  // de página: monta su propia entrada en cada paso. Es la PRIMERA pantalla
+  // que ve alguien nuevo — aquí es donde se decide si la app se siente
+  // cuidada o improvisada.
+  const pasoRef = useRef(null);
+  const tituloRef = useRef(null);
+  const genteRef = useRef(null);
+
+  useEffect(() => revelarTitulo(tituloRef.current, { retraso: 0.15 }), [paso]);
+  useEffect(() => revelarBloques(pasoRef.current, { retraso: 0.1 }), [paso]);
+  // La lista de participantes puede ser larga: cascada arriba, scroll abajo.
+  useEffect(() => {
+    if (!filtrados.length) return undefined;
+    return revelarLista(genteRef.current, '.person-row', { cascada: 0.045, y: 16 });
+  }, [filtrados]);
+
   // Cuenta atrás de la vigencia del código (5 min), solo mientras se pide.
   useEffect(() => {
     if (expiraEn <= 0) return undefined;
@@ -228,10 +245,10 @@ export default function Onboarding() {
   // ——— Paso 1: elegir reto
   if (paso === 1) {
     return (
-      <div className="onboard">
+      <div className="onboard" ref={pasoRef}>
         <div className="onboard-hero stagger">
           <div className="onboard-eyebrow">Reto del gym · 2026</div>
-          <h1 className="onboard-title">Más fuerte<br /><em>que ayer.</em></h1>
+          <h1 className="onboard-title" data-anim="titulo" ref={tituloRef}>Más fuerte<br /><em>que ayer.</em></h1>
           <p className="onboard-sub">Registra tus entrenamientos, defiende tu racha y compite por el bote. Elige tu reto para empezar.</p>
         </div>
         <div className="reto-cards stagger">
@@ -290,7 +307,7 @@ export default function Onboarding() {
         </button>
         <div className="onboard-hero" style={{ margin: '8px 0 22px' }}>
           <div className="onboard-eyebrow">{reto.nombre}</div>
-          <h1 className="onboard-title" style={{ fontSize: 'clamp(30px, 9vw, 40px)' }}>¿Quién <em>eres?</em></h1>
+          <h1 className="onboard-title" style={{ fontSize: 'clamp(30px, 9vw, 40px)' }} ref={tituloRef}>¿Quién <em>eres?</em></h1>
           <p className="onboard-sub">Busca tu nombre en la lista de participantes activos.</p>
         </div>
         <div className="search-wrap">
@@ -303,7 +320,7 @@ export default function Onboarding() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
-        <div className="people-list">
+        <div className="people-list" ref={genteRef}>
           {usuarios === null && <PeopleSkeleton rows={6} />}
           {errorCarga && (
             <div className="carga-error">
@@ -321,12 +338,11 @@ export default function Onboarding() {
           {usuarios !== null && !errorCarga && usuarios.length > 0 && !filtrados.length && (
             <div className="rank-empty">Ningún nombre coincide con «{busqueda.trim()}».</div>
           )}
-          {filtrados.map((u, i) => (
+          {filtrados.map((u) => (
             <button
               key={u.id}
               type="button"
               className="person-row"
-              style={{ animationDelay: `${Math.min(i * 0.05, 0.5)}s` }}
               onClick={() => { vibrate(); setElegido(u); setPass(''); setPass2(''); setError(''); setPaso(3); }}
             >
               <Avatar nombre={u.nombre} url={u.photoURL} className="person-av" />

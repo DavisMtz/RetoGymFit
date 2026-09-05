@@ -24,6 +24,12 @@ import Perfil from './screens/Perfil';
 // demanda para no pesar en el arranque de los participantes.
 const Admin = lazy(() => import('./screens/Admin'));
 
+// El orden REAL de la barra de pestañas. De aquí sale la dirección de la
+// transición: si te mueves a una pestaña de más a la derecha, la pantalla
+// nueva entra por la derecha. Sin esto, todas las pantallas entran igual y
+// la app se siente como un sitio web con enlaces, no como una app.
+const ORDEN_TABS = ['/', '/feed', '/historial', '/ranking', '/stats', '/perfil'];
+
 function Boot() {
   return (
     <div className="boot">
@@ -63,6 +69,7 @@ function Shell() {
   const [intro, setIntro] = useState(false);
   const previo = useRef(autenticado);
   const paginaRef = useRef(null);
+  const rutaPrevia = useRef(location.pathname);
   const [patrio, setPatrio] = useState(false);        // ¿tema patrio encendido?
   const [bienvenida, setBienvenida] = useState(false); // ¿toca el modal de una vez?
   const [guirnalda, setGuirnalda] = useState(false);   // ¿sigue montado el papel picado?
@@ -99,14 +106,28 @@ function Shell() {
     return () => clearTimeout(t);
   }, [patrio, guirnalda]);
 
-  // Transición de página con GSAP: cascada de los bloques de la pantalla.
+  // Transición de página con GSAP: cascada de los bloques de la pantalla,
+  // entrando por el lado del que vienes.
   // El scroll se reinicia SIEMPRE al cambiar de ruta: sin esto, llegar a una
   // pantalla corta (p. ej. una publicación) hereda el scroll de la anterior
   // y el contenido queda fuera de vista.
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // Instantaneo a proposito: el CSS pone `scroll-behavior: smooth` en el
+    // html, y con eso un cambio de pantalla se iba desplazando solo mientras
+    // la pantalla nueva ya estaba entrando. Una pantalla nueva empieza
+    // arriba, no viajando.
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const anterior = rutaPrevia.current;
+    rutaPrevia.current = location.pathname;
     if (!autenticado || esAdmin) return undefined;
-    return entradaPagina(paginaRef.current?.firstElementChild);
+    const destino = ORDEN_TABS.indexOf(location.pathname);
+    const origen = ORDEN_TABS.indexOf(anterior);
+    // Solo hay dirección entre dos pestañas: llegar por un enlace (una
+    // publicación compartida) entra de abajo, que es la entrada neutral.
+    const direccion = destino !== -1 && origen !== -1 && destino !== origen
+      ? Math.sign(destino - origen)
+      : 0;
+    return entradaPagina(paginaRef.current?.firstElementChild, { direccion });
   }, [location.pathname, autenticado, esAdmin]);
 
   // Push en primer plano: si llega una notificación con la app abierta,

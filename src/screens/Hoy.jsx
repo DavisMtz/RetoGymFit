@@ -15,7 +15,10 @@ import {
   obtenerQuienesEntrenaronHoy, obtenerUsuariosActivos, publicarPostRegistro,
 } from '../data/queries';
 import { sincronizarRegistro } from '../lib/sheets';
-import { entradaCelebracion } from '../lib/anim';
+import {
+  entradaCelebracion, revelarTitulo, animarBarra, encenderLlama, sacudir,
+  popEnCascada, chispazo, dibujarTrazo,
+} from '../lib/anim';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
 const FRASES = {
@@ -108,7 +111,7 @@ function Celebracion({ reto, datos, onCerrar }) {
               <span>Semana</span>
             </div>
           </div>
-          {datos.semana && <div className="celebra-anim"><WeekDots semana={datos.semana} /></div>}
+          {datos.semana && <div className="celebra-anim"><WeekDots semana={datos.semana} retraso={0.75} /></div>}
           <div className="celebra-cta celebra-anim">
             {requiereEvidencia ? (
               <>
@@ -157,9 +160,18 @@ function Celebracion({ reto, datos, onCerrar }) {
  */
 function EquipoHoy({ equipo }) {
   const [expandido, setExpandido] = useState(false);
+  const avsRef = useRef(null);
+  const fillRef = useRef(null);
+  const n = equipo?.entrenaron.length || 0;
+  const pct = equipo?.total ? Math.min((n / equipo.total) * 100, 100) : 0;
+
+  // Los avatares entran uno tras otro, como iría llegando la gente al gym.
+  useEffect(() => popEnCascada(avsRef.current, '.equipo-av', { retraso: 0.25, cascada: 0.06 }), [n]);
+  // La barra la mueve GSAP (el CSS ya no tiene transición): al refrescar,
+  // viaja desde donde estaba en vez de volver a nacer en cero.
+  useEffect(() => { animarBarra(fillRef.current, pct, { retraso: 0.3 }); }, [pct]);
+
   if (!equipo || !equipo.total) return null;
-  const n = equipo.entrenaron.length;
-  const pct = Math.min((n / equipo.total) * 100, 100);
   const visibles = equipo.entrenaron.slice(0, 8);
   const extra = n - visibles.length;
   const horaDe = (e) => (e.creadoEn
@@ -185,22 +197,19 @@ function EquipoHoy({ equipo }) {
           )}
         </span>
       </div>
-      <div className="equipo-avs">
+      <div className="equipo-avs" ref={avsRef}>
         {n === 0 && <span style={{ fontSize: 12, color: 'var(--text-low)' }}>Nadie ha entrenado aún — abre tú el marcador 🏁</span>}
-        {visibles.map((e, i) => (
+        {visibles.map((e) => (
           <span
             className="equipo-av"
             key={e.usuarioId}
             title={e.nombre}
-            style={{
-              animationDelay: `${i * 0.05}s`,
-              ...(equipo.fotos[e.usuarioId] ? { backgroundImage: `url(${equipo.fotos[e.usuarioId]})` } : {}),
-            }}
+            style={equipo.fotos[e.usuarioId] ? { backgroundImage: `url(${equipo.fotos[e.usuarioId]})` } : undefined}
           >
             {!equipo.fotos[e.usuarioId] && getInitials(e.nombre)}
           </span>
         ))}
-        {extra > 0 && <span className="equipo-av mas" style={{ animationDelay: `${visibles.length * 0.05}s` }}>+{extra}</span>}
+        {extra > 0 && <span className="equipo-av mas">+{extra}</span>}
       </div>
       <div className="equipo-detalle" aria-hidden={!expandido}>
         <div className="equipo-detalle-inner">
@@ -223,7 +232,7 @@ function EquipoHoy({ equipo }) {
           ))}
         </div>
       </div>
-      <div className="equipo-track"><div className="equipo-fill" style={{ width: `${pct}%` }} /></div>
+      <div className="equipo-track"><div className="equipo-fill" ref={fillRef} /></div>
     </div>
   );
 }
@@ -248,6 +257,12 @@ export default function Hoy() {
   const [honor, setHonor] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [modalWA, setModalWA] = useState(null); // { url }
+
+  const tituloRef = useRef(null);
+  const barraRef = useRef(null);
+  const llamaRef = useRef(null);
+  const peligroRef = useRef(null);
+  const palomaRef = useRef(null);
 
   const actividad = reto.actividades.find((a) => a.id === tipo);
   const colores = coloresCelebracion(
@@ -397,6 +412,22 @@ export default function Hoy() {
   const progresoPct = Math.min((diasSemana / reto.metaDiasSemana) * 100, 100);
   const diasAnim = useCountUp(diasSemana, 800);
 
+  // El titular se parte en palabras y sube tras la máscara de su línea.
+  useEffect(() => revelarTitulo(tituloRef.current, { retraso: 0.25 }), []);
+  // La barra de la semana arranca después de que el bloque terminó de entrar.
+  useEffect(() => { animarBarra(barraRef.current, progresoPct, { retraso: 0.45 }); }, [progresoPct]);
+  // La llama de la racha late sola mientras la racha exista.
+  useEffect(() => encenderLlama(llamaRef.current), [racha]);
+  // El aviso de multa tiembla UNA vez, y tarde: si temblara al entrar se
+  // perdería entre la cascada de la pantalla y nadie lo leería como aviso.
+  useEffect(() => {
+    if (!peligro) return undefined;
+    const t = setTimeout(() => sacudir(peligroRef.current, { fuerza: peligro.critico ? 10 : 7 }), 900);
+    return () => clearTimeout(t);
+  }, [peligro]);
+  // La palomita de "ya registraste" se dibuja sola.
+  useEffect(() => { if (registroHoy) dibujarTrazo(palomaRef.current, { retraso: 0.35 }); }, [registroHoy]);
+
   return (
     <div className="app-shell">
       <Header reto={reto} />
@@ -405,14 +436,14 @@ export default function Hoy() {
 
       <section className="hero stagger">
         <div className="hero-eyebrow">Tu reto · Esta semana</div>
-        <h1 className="hero-title">Más fuerte<br /><em>que ayer.</em></h1>
+        <h1 className="hero-title" data-anim="titulo" ref={tituloRef}>Más fuerte<br /><em>que ayer.</em></h1>
         <p className="hero-sub">Registra tu actividad de hoy. Tu equipo te está viendo.</p>
         <div className="hero-stat">
           <div className="hero-stat-num">{Math.round(diasAnim ?? diasSemana)}<span>/{reto.metaDiasSemana}</span></div>
           <div className="hero-stat-label">Días<br />completados</div>
         </div>
         <div className="progress-track">
-          <div className={`progress-fill ${diasSemana >= reto.metaDiasSemana ? 'complete' : ''}`} style={{ width: `${progresoPct}%` }} />
+          <div className={`progress-fill ${diasSemana >= reto.metaDiasSemana ? 'complete' : ''}`} ref={barraRef} />
         </div>
       </section>
 
@@ -421,7 +452,7 @@ export default function Hoy() {
         <p>{frase}</p>
         {racha > 0 && (
           <div className="streak">
-            <span className="streak-flame">{racha > 10 ? '🔥🔥🔥' : racha > 5 ? '🔥🔥' : '🔥'}</span>
+            <span className="streak-flame" ref={llamaRef}>{racha > 10 ? '🔥🔥🔥' : racha > 5 ? '🔥🔥' : '🔥'}</span>
             Racha · <b>{racha} días</b>
           </div>
         )}
@@ -445,7 +476,7 @@ export default function Hoy() {
       )}
 
       {peligro && (
-        <div className={`danger-strip ${peligro.critico ? 'critical' : ''}`}>
+        <div className={`danger-strip ${peligro.critico ? 'critical' : ''}`} ref={peligroRef}>
           <span className="danger-icon">⚠️</span>
           <span className="danger-text">
             Llevas <b>{diasSemana} día{diasSemana !== 1 ? 's' : ''}</b> esta semana — necesitas <b>{peligro.faltan} más</b> para no multar.
@@ -460,7 +491,7 @@ export default function Hoy() {
       {registroHoy && (
         <section className="card">
           <div className="done-state">
-            <div className="done-circle">
+            <div className="done-circle" ref={palomaRef}>
               <div className="done-circle-inner">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
               </div>
@@ -490,7 +521,14 @@ export default function Hoy() {
                   key={a.id}
                   type="button"
                   className={`activity-chip ${a.ancho === 'full' ? 'full' : ''} ${a.tema === 'period' ? 'period' : ''} ${tipo === a.id ? 'selected' : ''}`}
-                  onClick={() => { vibrate(); setTipo(a.id); if (!a.requiereDatos) { setHoras(''); setMinutos(''); setCalorias(''); setHonor(false); } }}
+                  onClick={(ev) => {
+                    vibrate();
+                    // Onda de confirmación: el chip ya cambia de color, pero
+                    // el destello es lo que se ve sin mirar directo al chip.
+                    if (tipo !== a.id) chispazo(ev.currentTarget, { anillos: 1, tamano: 0.7 });
+                    setTipo(a.id);
+                    if (!a.requiereDatos) { setHoras(''); setMinutos(''); setCalorias(''); setHonor(false); }
+                  }}
                 >
                   <span className="ac-icon">{a.icono}</span>
                   <div>

@@ -907,7 +907,9 @@ input:disabled { opacity: 0.55; }
 .composer-publish:active { transform: scale(0.95); }
 .composer-publish:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
 
-.post-wrap { opacity: 0; animation: rise 0.5s var(--soft) forwards; }
+/* Las publicaciones las revela GSAP (revelarLista): las que ya se ven entran
+   en cascada y las de más abajo esperan al scroll. Nacen visibles. */
+.post-wrap { display: block; }
 .post {
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: 16px; margin-bottom: 12px; position: relative;
@@ -1319,7 +1321,9 @@ input:disabled { opacity: 0.55; }
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: var(--r-md); padding: 18px 18px 10px; overflow: hidden;
 }
-.pd-entrada { animation: rise 0.55s var(--soft) both; }
+/* La entrada de la publicacion la hace la transicion de pagina (GSAP): con
+   una animacion CSS aqui ganaba el CSS y la cascada no se veia. */
+.pd-entrada { display: block; }
 .pd-cargando { display: flex; align-items: center; gap: 12px; }
 
 .pd-autor { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }

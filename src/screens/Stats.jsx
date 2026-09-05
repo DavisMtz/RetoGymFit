@@ -2,9 +2,10 @@
  * Estadísticas personales: tiles de resumen, cumplimiento de las últimas
  * 8 semanas (barras vs. línea de meta) y distribución por tipo de actividad.
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast, Header, StatusStrip, useCountUp } from '../components/ui';
+import { revelarTitulo, popEnCascada, alAsomarse, animarBarra } from '../lib/anim';
 import { obtenerHistorial } from '../data/queries';
 import { calcularRacha, mejorRacha, semanaISO, anioISO, hoyMX, lunesDe, sumarDias } from '../lib/dates';
 
@@ -60,6 +61,34 @@ export default function Stats() {
     };
   }, [registros, reto]);
 
+  const tituloRef = useRef(null);
+  const tilesRef = useRef(null);
+  const barrasRef = useRef(null);
+  const distRef = useRef(null);
+
+  useEffect(() => revelarTitulo(tituloRef.current, { retraso: 0.2 }), []);
+  // Las tarjetas de cifras entran cuando ya hay números que enseñar.
+  useEffect(() => popEnCascada(tilesRef.current, '.stat-tile', { retraso: 0.15, cascada: 0.07, escala: 0.85 }), [stats]);
+  // Las barras crecen cuando el scroll llega a ellas, no antes: si crecieran
+  // arriba del pliegue, para cuando bajas ya se habían movido y te pierdes
+  // lo único que cuenta la historia de las ocho semanas.
+  useEffect(() => {
+    if (!stats) return undefined;
+    return alAsomarse(barrasRef.current, (cont) => {
+      cont.querySelectorAll('.bar').forEach((b, i) => animarBarra(b, Number(b.dataset.pct), {
+        propiedad: 'height', retraso: i * 0.06, duracion: 0.85,
+      }));
+    });
+  }, [stats]);
+  useEffect(() => {
+    if (!stats) return undefined;
+    return alAsomarse(distRef.current, (cont) => {
+      cont.querySelectorAll('.td-fill').forEach((f, i) => animarBarra(f, Number(f.dataset.pct), {
+        retraso: i * 0.08, duracion: 0.9,
+      }));
+    });
+  }, [stats]);
+
   const diasAnim = useCountUp(stats ? stats.totalDias : null, 900);
   const kcalAnim = useCountUp(stats ? stats.totalKcal : null, 1500);
   const hrsAnim = useCountUp(stats ? Math.round(stats.totalMin / 60) : null, 1200);
@@ -73,7 +102,7 @@ export default function Stats() {
 
       <section className="hero" style={{ padding: '24px 22px 20px' }}>
         <div className="hero-eyebrow">Tus números</div>
-        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }}>Datos que <em>no mienten.</em></h1>
+        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }} ref={tituloRef}>Datos que <em>no mienten.</em></h1>
         <p className="hero-sub">Todo lo que has construido en el reto, medido.</p>
       </section>
 
@@ -81,28 +110,28 @@ export default function Stats() {
 
       {stats && (
         <>
-          <div className="stats-grid">
-            <div className="stat-tile" style={{ animationDelay: '0.05s' }}>
+          <div className="stats-grid" ref={tilesRef}>
+            <div className="stat-tile">
               <div className="st-num">{Math.round(diasAnim)}</div>
               <div className="st-label">Días cumplidos<br />en total</div>
             </div>
-            <div className="stat-tile" style={{ animationDelay: '0.12s' }}>
+            <div className="stat-tile">
               <div className="st-num">{Math.round(rachaAnim)}<small>días</small></div>
               <div className="st-label">Racha<br />actual 🔥</div>
             </div>
-            <div className="stat-tile" style={{ animationDelay: '0.19s' }}>
+            <div className="stat-tile">
               <div className="st-num">{Math.round(kcalAnim).toLocaleString('es-MX')}</div>
               <div className="st-label">Kcal quemadas<br />acumuladas</div>
             </div>
-            <div className="stat-tile" style={{ animationDelay: '0.26s' }}>
+            <div className="stat-tile">
               <div className="st-num">{Math.round(hrsAnim)}<small>hrs</small></div>
               <div className="st-label">Horas de<br />entrenamiento</div>
             </div>
-            <div className="stat-tile" style={{ animationDelay: '0.33s' }}>
+            <div className="stat-tile">
               <div className="st-num">{Math.round(mejorAnim)}<small>días</small></div>
               <div className="st-label">Mejor racha<br />histórica</div>
             </div>
-            <div className="stat-tile" style={{ animationDelay: '0.4s' }}>
+            <div className="stat-tile">
               <div className="st-num">{stats.semanasCumplidas}<small>/8</small></div>
               <div className="st-label">Semanas al 100<br />(últimas 8)</div>
             </div>
@@ -115,7 +144,7 @@ export default function Stats() {
                 Meta · {reto.metaDiasSemana} días
               </span>
             </div>
-            <div className="bars" style={{ position: 'relative' }}>
+            <div className="bars" style={{ position: 'relative' }} ref={barrasRef}>
               {/* Línea de meta */}
               <div
                 className="meta-line"
@@ -127,7 +156,7 @@ export default function Stats() {
                   <span className="bar-val">{s.dias > 0 ? s.dias : ''}</span>
                   <div
                     className={`bar ${s.dias >= reto.metaDiasSemana ? 'ok' : ''}`}
-                    style={{ height: `${(s.dias / 7) * 100}%` }}
+                    data-pct={(s.dias / 7) * 100}
                     title={`${s.label}: ${s.dias} día${s.dias !== 1 ? 's' : ''}`}
                   />
                   <span className="bar-label">{s.label}</span>
@@ -139,13 +168,13 @@ export default function Stats() {
           {stats.distribucion.length > 0 && (
             <section className="card">
               <div className="card-head"><h2 className="card-title">Por actividad</h2></div>
-              <div className="tipo-dist">
+              <div className="tipo-dist" ref={distRef}>
                 {stats.distribucion.map((d) => (
                   <div className="tipo-row" key={d.id}>
                     <span className="td-icon">{d.icono}</span>
                     <span className="td-name">{d.nombre}</span>
                     <div className="td-track">
-                      <div className="td-fill" style={{ width: `${(d.n / stats.maxTipo) * 100}%` }} />
+                      <div className="td-fill" data-pct={(d.n / stats.maxTipo) * 100} />
                     </div>
                     <span className="td-num">{d.n}</span>
                   </div>

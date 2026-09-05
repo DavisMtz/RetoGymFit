@@ -1,9 +1,10 @@
 /**
  * Historial: todos tus registros agrupados por semana, con estatus.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast, Header, StatusStrip } from '../components/ui';
+import { revelarTitulo, revelarLista } from '../lib/anim';
 import { obtenerHistorial } from '../data/queries';
 import { semanaISO, anioISO, aFecha, DIAS_CORTOS } from '../lib/dates';
 
@@ -17,6 +18,17 @@ export default function Historial() {
       .then(setRegistros)
       .catch(() => { toast('Error al cargar el historial', true); setRegistros([]); });
   }, [reto, usuario, toast]);
+
+  const tituloRef = useRef(null);
+  const listaRef = useRef(null);
+
+  useEffect(() => revelarTitulo(tituloRef.current, { retraso: 0.2 }), []);
+  // La bitácora puede tener meses de filas: las de arriba entran solas y el
+  // resto va apareciendo conforme bajas. Nada se anima dos veces.
+  useEffect(() => {
+    if (!registros?.length) return undefined;
+    return revelarLista(listaRef.current, '.hist-row', { cascada: 0.04, y: 18 });
+  }, [registros]);
 
   const iconos = Object.fromEntries(reto.actividades.map((a) => [a.id, a.icono]));
 
@@ -39,7 +51,7 @@ export default function Historial() {
 
       <section className="hero" style={{ padding: '24px 22px 20px' }}>
         <div className="hero-eyebrow">Tu bitácora</div>
-        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }}>Historial de <em>batalla.</em></h1>
+        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }} ref={tituloRef}>Historial de <em>batalla.</em></h1>
         <p className="hero-sub">Cada registro cuenta tu historia en el reto.</p>
       </section>
 
@@ -48,12 +60,13 @@ export default function Historial() {
         <div className="rank-empty">Aún no tienes registros. ¡Hoy es un gran día para empezar!</div>
       )}
 
-      {semanas.map((s, si) => {
+      <div className="hist-lista" ref={listaRef}>
+      {semanas.map((s) => {
         const diasCumplidos = new Set(
           s.registros.filter((r) => r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO').map((r) => r.fecha),
         ).size;
         return (
-          <div className="hist-week" key={s.key} style={{ animationDelay: `${Math.min(si * 0.08, 0.4)}s` }}>
+          <div className="hist-week" key={s.key}>
             <div className="hist-week-label">
               Semana {String(s.semana).padStart(2, '0')} · <b>{diasCumplidos}/{reto.metaDiasSemana} días</b>
             </div>
@@ -84,6 +97,7 @@ export default function Historial() {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

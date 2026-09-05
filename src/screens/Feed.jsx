@@ -18,7 +18,7 @@ import {
 } from '../data/queries';
 import { hace } from '../components/Comentarios';
 import { subirFotoFeed } from '../lib/feedFoto';
-import { punch, particulasEmoji } from '../lib/anim';
+import { punch, particulasEmoji, chispazo, revelarLista, revelarTitulo } from '../lib/anim';
 import { auth } from '../firebase';
 
 const EMOJIS = ['💪', '🔥', '👏', '😮', '❤️'];
@@ -40,7 +40,10 @@ function Post({ reto, post, fotos, dias, onBorrar, onAbrir }) {
     vibrate(18);
     if (el) punch(el, 1.35);
     // Partículas solo al PONER una reacción (no al quitarla o cambiarla)
-    if (el && miReaccion !== emoji) particulasEmoji(el, emoji);
+    if (el && miReaccion !== emoji) {
+      chispazo(el, { anillos: 1, tamano: 1.5 });
+      particulasEmoji(el, emoji);
+    }
     try {
       await reaccionarPost(reto.id, post, usuario, miReaccion === emoji ? null : emoji);
       // onSnapshot refresca el post solo; no hace falta estado local
@@ -151,6 +154,8 @@ export default function Feed() {
   const [fotoPreview, setFotoPreview] = useState(null);
   const [publicando, setPublicando] = useState(false);
   const [modalBorrar, setModalBorrar] = useState(null); // post
+  const tituloRef = useRef(null);
+  const listaRef = useRef(null);
 
   // Feed en vivo
   useEffect(() => {
@@ -175,6 +180,16 @@ export default function Feed() {
   useEffect(() => { cargarGente().catch(() => {}); }, [cargarGente]);
 
   const ptr = usePullToRefresh(() => cargarGente().catch(() => {}));
+
+  useEffect(() => revelarTitulo(tituloRef.current, { retraso: 0.2 }), []);
+
+  // El feed llega en vivo (onSnapshot), así que esto se vuelve a ejecutar en
+  // cada cambio: `revelarLista` marca lo ya revelado y solo anima lo nuevo —
+  // cuando alguien publica, entra SU tarjeta y las demás ni se enteran.
+  useEffect(() => {
+    if (!posts?.length) return undefined;
+    return revelarLista(listaRef.current, '.post-wrap', { cascada: 0.06 });
+  }, [posts]);
 
   // Cada publicación vive en su propia URL: se abre, se comparte, se enlaza
   const abrirPost = useCallback((p) => {
@@ -234,7 +249,7 @@ export default function Feed() {
 
       <section className="hero" style={{ padding: '24px 22px 20px' }}>
         <div className="hero-eyebrow">Comunidad</div>
-        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }}>El feed del <em>equipo.</em></h1>
+        <h1 className="hero-title" style={{ fontSize: 'clamp(28px, 8vw, 36px)' }} ref={tituloRef}>El feed del <em>equipo.</em></h1>
         <p className="hero-sub">Comparte tu progreso, presume tus récords y echa porras.</p>
       </section>
 
@@ -274,18 +289,23 @@ export default function Feed() {
       {posts !== null && !posts.length && (
         <div className="rank-empty">Nadie ha publicado aún. ¡Rompe el hielo con tu primera foto! 📸</div>
       )}
-      {(posts || []).map((p, i) => (
-        <div key={p.id} className="post-wrap" style={{ animationDelay: `${Math.min(i * 0.06, 0.4)}s` }}>
-          <Post
-            reto={reto}
-            post={p}
-            fotos={fotos}
-            dias={dias}
-            onBorrar={setModalBorrar}
-            onAbrir={abrirPost}
-          />
-        </div>
-      ))}
+      {/* Las publicaciones viven dentro de su propio contenedor para que la
+          transición de página anime UN bloque y no las cincuenta tarjetas:
+          de eso ya se encarga `revelarLista` con el scroll. */}
+      <div className="feed-lista" ref={listaRef}>
+        {(posts || []).map((p) => (
+          <div key={p.id} className="post-wrap">
+            <Post
+              reto={reto}
+              post={p}
+              fotos={fotos}
+              dias={dias}
+              onBorrar={setModalBorrar}
+              onAbrir={abrirPost}
+            />
+          </div>
+        ))}
+      </div>
 
       {/* Modal borrar post */}
       <div className={`modal-overlay ${modalBorrar ? 'show' : ''}`}>

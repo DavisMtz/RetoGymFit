@@ -56,6 +56,22 @@ export const EASE = {
 export const reducido = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+/**
+ * ¿Toca animar la ENTRADA de algo?
+ *
+ * No, si el usuario pidió menos movimiento. Y tampoco si la pantalla está
+ * naciendo en una pestaña que nadie está viendo: el navegador congela ahí el
+ * `requestAnimationFrame`, la entrada se queda a medias y lo que debía
+ * aparecer no aparece nunca. Es exactamente lo que pasa al abrir la app
+ * desde un enlace de WhatsApp, y por eso en ese caso no se anima: el
+ * contenido se pone y ya. Lo comprobó el banco de pruebas, no la intuición.
+ *
+ * Ojo: esto es para entradas. Las micro-interacciones (un toque, una
+ * reacción) solo miran `reducido()`, porque si hay un dedo en la pantalla la
+ * pestaña se está viendo por definición.
+ */
+const sinMovimiento = () => reducido() || (typeof document !== 'undefined' && document.hidden);
+
 // Capas flotantes que NUNCA deben entrar en la cascada de página:
 // los modales/hojas viven ocultos en el DOM (opacity 0) y animarlos
 // los haría parpadear al cambiar de sección.
@@ -108,7 +124,7 @@ function ahorrarEnSegundoPlano(...animaciones) {
  * de abajo, que es la entrada neutral de siempre.
  */
 export function entradaPagina(contenedor, opciones = {}) {
-  if (!contenedor || reducido()) return undefined;
+  if (!contenedor || sinMovimiento()) return undefined;
   const { direccion = 0 } = opciones;
   const hijos = Array.from(contenedor.children)
     .filter((el) => !el.matches(SELECTOR_FLOTANTES))
@@ -170,7 +186,7 @@ function interioresDeStagger(contenedor) {
  * la transición de página (el onboarding, que vive fuera del router).
  */
 export function revelarBloques(contenedor, opciones = {}) {
-  if (!contenedor || reducido()) return undefined;
+  if (!contenedor || sinMovimiento()) return undefined;
   const { retraso = 0.05, cascada = 0.07 } = opciones;
   const internos = interioresDeStagger(contenedor);
   if (!internos.length) return undefined;
@@ -200,23 +216,34 @@ export function revelarBloques(contenedor, opciones = {}) {
  * respaldo y las palabras quedan repartidas mal.
  */
 export function revelarTitulo(el, opciones = {}) {
-  if (!el || reducido()) return undefined;
+  if (!el || sinMovimiento()) return undefined;
   const { retraso = 0.1, duracion = 0.85, cascada = 0.055 } = opciones;
+  let cerrarEntrada;
   const particion = SplitText.create(el, {
     type: 'lines,words',
     mask: 'lines',
     linesClass: 'anim-linea',
+    wordsClass: 'anim-palabra',
     autoSplit: true,
-    onSplit: (self) => gsap.from(self.words, {
-      yPercent: 120,
-      opacity: 0,
-      duration: duracion,
-      delay: retraso,
-      ease: 'expo.out',
-      stagger: cascada,
-    }),
+    onSplit: (self) => {
+      const entrada = gsap.from(self.words, {
+        yPercent: 120,
+        opacity: 0,
+        duration: duracion,
+        delay: retraso,
+        ease: 'expo.out',
+        stagger: cascada,
+      });
+      // Las palabras nacen invisibles: si la pestaña se oculta antes de que
+      // terminen de subir, el titular se quedaría en blanco. `blindar` las
+      // deja puestas. (`autoSplit` puede volver a partir el titulo cuando
+      // cargan las tipografías: cada corte trae su propia red.)
+      cerrarEntrada?.();
+      cerrarEntrada = blindar(entrada);
+      return entrada;
+    },
   });
-  return () => particion.revert();
+  return () => { cerrarEntrada?.(); particion.revert(); };
 }
 
 /**
@@ -233,7 +260,7 @@ export function revelarTitulo(el, opciones = {}) {
  * anima ella y las demás se quedan quietas.
  */
 export function revelarLista(contenedor, selector, opciones = {}) {
-  if (!contenedor || reducido()) return undefined;
+  if (!contenedor || sinMovimiento()) return undefined;
   const { y = 24, duracion = 0.6, cascada = 0.07, retraso = 0 } = opciones;
   const nuevos = gsap.utils
     .toArray(contenedor.querySelectorAll(selector))
@@ -248,16 +275,18 @@ export function revelarLista(contenedor, selector, opciones = {}) {
     (el.getBoundingClientRect().top < alto * 0.92 ? aLaVista : porLlegar).push(el);
   });
 
-  let entrada;
+  // Cada tween que nace con el contenido oculto lleva su red de seguridad:
+  // si la pestaña se va a segundo plano a media entrada, se termina sola.
+  const cierres = [];
   if (aLaVista.length) {
-    entrada = gsap.fromTo(
+    cierres.push(blindar(gsap.fromTo(
       aLaVista,
       { y, opacity: 0 },
       {
         y: 0, opacity: 1, duration: duracion, delay: retraso, ease: EASE.entrada,
         stagger: cascada, clearProps: 'transform,opacity',
       },
-    );
+    )));
   }
 
   let disparadores = [];
@@ -266,19 +295,82 @@ export function revelarLista(contenedor, selector, opciones = {}) {
     disparadores = ScrollTrigger.batch(porLlegar, {
       start: 'top 93%',
       once: true,
-      onEnter: (lote) => gsap.to(lote, {
-        y: 0, opacity: 1, duration: duracion, ease: EASE.entrada,
-        stagger: cascada, clearProps: 'transform,opacity',
-      }),
+      onEnter: (lote) => {
+        cierres.push(blindar(gsap.to(lote, {
+          y: 0, opacity: 1, duration: duracion, ease: EASE.entrada,
+          stagger: cascada, clearProps: 'transform,opacity',
+        })));
+      },
     });
   }
 
   return () => {
-    entrada?.kill();
+    cierres.forEach((c) => c());
     disparadores.forEach((d) => d.kill());
     // Al desmontar, nada puede quedarse invisible esperando un scroll.
     if (porLlegar.length) gsap.set(porLlegar, { clearProps: 'transform,opacity' });
   };
+}
+
+/**
+ * Cascada de "pops" para grupos chicos que caben de un vistazo: los avatares
+ * de quienes ya entrenaron hoy, las tarjetas de estadísticas. No usa
+ * ScrollTrigger a propósito — para seis u ocho elementos que ya están a la
+ * vista, un disparador de scroll es maquinaria de más.
+ */
+export function popEnCascada(contenedor, selector, opciones = {}) {
+  if (!contenedor || sinMovimiento()) return undefined;
+  const els = contenedor.querySelectorAll(selector);
+  if (!els.length) return undefined;
+  const { retraso = 0.1, cascada = 0.05, desde = 'start', escala = 0.4 } = opciones;
+  const tl = gsap.timeline({ delay: retraso });
+  tl.fromTo(
+    els,
+    { scale: escala, opacity: 0 },
+    {
+      scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2)',
+      stagger: { each: cascada, from: desde }, clearProps: 'transform,opacity',
+    },
+  );
+  return blindar(tl);
+}
+
+/**
+ * La semana visual: los siete días se encienden de lunes a domingo y el de
+ * HOY se queda respirando. Ese latido no es decoración: en una pantalla
+ * llena de círculos iguales es lo que dice "aquí estás parado".
+ */
+export function revelarSemana(contenedor, opciones = {}) {
+  if (!contenedor || sinMovimiento()) return undefined;
+  const { retraso = 0 } = opciones;
+  const puntos = contenedor.querySelectorAll('.week-dot-circle');
+  if (!puntos.length) return undefined;
+
+  const tl = gsap.timeline({ delay: retraso });
+  tl.fromTo(
+    puntos,
+    { scale: 0.25, opacity: 0 },
+    {
+      scale: 1, opacity: 1, duration: 0.45, ease: 'back.out(2.4)',
+      stagger: 0.05, clearProps: 'transform,opacity',
+    },
+  );
+
+  const hoy = contenedor.querySelector('.week-dot-circle.hoy');
+  const latido = hoy
+    ? gsap.to(hoy, {
+      scale: 1.09,
+      duration: 1.5,
+      ease: 'sine.inOut',
+      yoyo: true,
+      repeat: -1,
+      delay: retraso + puntos.length * 0.05 + 0.3,
+    })
+    : null;
+
+  const cerrar = blindar(tl);
+  const dormir = latido ? ahorrarEnSegundoPlano(latido) : null;
+  return () => { cerrar(); dormir?.(); };
 }
 
 /**
@@ -287,7 +379,7 @@ export function revelarLista(contenedor, selector, opciones = {}) {
  */
 export function alAsomarse(el, alEntrar, opciones = {}) {
   if (!el) return undefined;
-  if (reducido()) { alEntrar(el); return undefined; }
+  if (sinMovimiento()) { alEntrar(el); return undefined; }
   const { inicio = 'top 88%' } = opciones;
   const disparador = ScrollTrigger.create({
     trigger: el,
@@ -311,14 +403,14 @@ export function animarBarra(el, porcentaje, opciones = {}) {
   if (!el) return;
   const { propiedad = 'width', duracion = 1.1, retraso = 0, ease = EASE.springSoft } = opciones;
   const destino = `${Math.max(0, Math.min(100, porcentaje || 0))}%`;
-  if (reducido()) { gsap.set(el, { [propiedad]: destino }); return; }
+  if (sinMovimiento()) { gsap.set(el, { [propiedad]: destino }); return; }
   gsap.to(el, { [propiedad]: destino, duration: duracion, delay: retraso, ease, overwrite: 'auto' });
 }
 
 /** Contador numérico. Devuelve el tween para poder matarlo al desmontar. */
 export function contarHasta(desde, hasta, duracion, alActualizar, opciones = {}) {
   const { ease = 'power2.out', salto = 0 } = opciones;
-  if (reducido()) { alActualizar(hasta); return null; }
+  if (sinMovimiento()) { alActualizar(hasta); return null; }
   const proxy = { v: desde };
   return gsap.to(proxy, {
     v: hasta,
@@ -336,7 +428,7 @@ export function contarHasta(desde, hasta, duracion, alActualizar, opciones = {})
  * completa desde el principio.
  */
 export function dibujarTrazo(contenedor, opciones = {}) {
-  if (!contenedor || reducido()) return;
+  if (!contenedor || sinMovimiento()) return;
   const { duracion = 0.55, retraso = 0.15, cascada = 0.08, ease = 'power2.inOut' } = opciones;
   const trazos = contenedor.querySelectorAll('path, polyline, line');
   if (!trazos.length) return;
@@ -507,7 +599,7 @@ export function particulasEmoji(el, emoji, cantidad = 6) {
 
 /** Apertura del lightbox: la foto entra con zoom elástico y el pie sube. */
 export function abrirLightbox(img, caption) {
-  if (reducido()) return;
+  if (sinMovimiento()) return;
   if (img) {
     gsap.fromTo(img, { scale: 0.82, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.55, ease: 'back.out(1.6)' });
   }
@@ -518,7 +610,7 @@ export function abrirLightbox(img, caption) {
 
 /** Apertura del visor de avatar: zoom elástico de la foto + nombre. */
 export function abrirAvatar(el, nombre) {
-  if (reducido()) return;
+  if (sinMovimiento()) return;
   if (el) gsap.fromTo(el, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.8)' });
   if (nombre) gsap.fromTo(nombre, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.35, delay: 0.1, ease: 'power2.out' });
 }
@@ -533,7 +625,7 @@ export function abrirAvatar(el, nombre) {
  * está en el orden, no en la duración.
  */
 export function entradaPodio(contenedor) {
-  if (!contenedor || reducido()) return undefined;
+  if (!contenedor || sinMovimiento()) return undefined;
   const cols = contenedor.querySelectorAll('.podium-col');
   if (!cols.length) return undefined;
   const porLugar = (n) => contenedor.querySelector(`.podium-col.p-${n}`);
@@ -587,21 +679,30 @@ export function entradaPodio(contenedor) {
   }
 
   const corona = contenedor.querySelector('.podium-crown');
+  let flotar;
   if (corona) {
     tl.fromTo(
       corona,
       { y: -32, opacity: 0, rotate: -24, scale: 0.7 },
-      { y: 0, opacity: 1, rotate: 0, scale: 1, duration: 0.75, ease: 'bounce.out', clearProps: 'transform,opacity' },
+      { y: 0, opacity: 1, rotate: 0, scale: 1, duration: 0.75, ease: 'bounce.out' },
       0.78,
     );
+    // Y después se queda flotando. Esto lo hacía el CSS con `float-y`, pero
+    // una animación CSS le gana a los estilos en línea de GSAP: mientras
+    // estuvo puesta, la corona nunca llegó a caer — se veía aparecer.
+    flotar = gsap.to(corona, {
+      y: -4, duration: 1.5, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.6,
+    });
   }
 
-  return blindar(tl);
+  const cerrar = blindar(tl);
+  const dormir = flotar ? ahorrarEnSegundoPlano(flotar) : null;
+  return () => { cerrar(); dormir?.(); };
 }
 
 /** Entrada del banner de instalación: se asoma desde abajo con rebote suave. */
 export function entradaBanner(el) {
-  if (!el || reducido()) return;
+  if (!el || sinMovimiento()) return;
   gsap.fromTo(el, { y: 90, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, ease: 'back.out(1.4)' });
 }
 
@@ -623,11 +724,12 @@ export function salidaBanner(el) {
  * anterior: así son cuatro compases y no cuatro animaciones en fila.
  */
 export function entradaCelebracion(overlay) {
-  if (!overlay || reducido()) return undefined;
+  if (!overlay || sinMovimiento()) return undefined;
   const icono = overlay.querySelector('.celebra-icono');
   const titulo = overlay.querySelector('.celebra-titulo');
   const bloques = overlay.querySelectorAll('.celebra-anim:not(.celebra-titulo)');
-  const puntos = overlay.querySelectorAll('.week-dot-circle');
+  // La semana no se anima aquí: la enciende el propio WeekDots al montarse,
+  // con el retraso que le pasa la celebración. Un solo dueño por elemento.
 
   const tl = gsap.timeline({ defaults: { ease: EASE.entrada } });
 
@@ -657,19 +759,6 @@ export function entradaCelebracion(overlay) {
     );
   }
 
-  // La semana se enciende día por día: es el resumen de por qué estás aquí.
-  if (puntos.length) {
-    tl.fromTo(
-      puntos,
-      { scale: 0.3, opacity: 0 },
-      {
-        scale: 1, opacity: 1, duration: 0.42, ease: 'back.out(2.6)',
-        stagger: 0.055, clearProps: 'transform,opacity',
-      },
-      0.62,
-    );
-  }
-
   const cerrar = blindar(tl);
   return () => { cerrar(); particion?.revert(); };
 }
@@ -694,7 +783,7 @@ export function introCinematica(raiz, alTerminar) {
   const lineas = raiz.querySelector('.anime-bg-lines');
   const contenido = raiz.querySelector('.anime-content');
 
-  if (reducido()) {
+  if (sinMovimiento()) {
     gsap.set([titulo, subtitulo].filter(Boolean), { opacity: 1, clipPath: 'none' });
     return undefined;
   }
@@ -712,13 +801,14 @@ export function introCinematica(raiz, alTerminar) {
   }
 
   if (corte) {
-    // El rotate va explícito en los dos extremos: el CSS deja el corte en
-    // `rotate(-10deg) scaleX(0)` y de una matriz con escala cero no se puede
-    // recuperar el giro — GSAP lo enderezaría y el tajo saldría horizontal.
+    // Giro y sesgo explícitos en los dos extremos: el CSS deja el corte en
+    // `rotate(-10deg) scaleX(0)` y de una matriz con escala cero el giro ya
+    // no se puede recuperar — GSAP lo leía como un sesgo de -10°, le sumaba
+    // el rotate y el tajo salía al DOBLE de inclinación. Lo cazó el banco.
     tl.fromTo(
       corte,
-      { scaleX: 0, rotate: -10, transformOrigin: 'left center', opacity: 1 },
-      { scaleX: 1, rotate: -10, duration: 0.26, ease: 'power4.in' },
+      { scaleX: 0, rotate: -10, skewX: 0, transformOrigin: 'left center', opacity: 1 },
+      { scaleX: 1, rotate: -10, skewX: 0, duration: 0.26, ease: 'power4.in' },
       0.08,
     )
       .set(corte, { transformOrigin: 'right center' }, 0.34)
@@ -781,7 +871,7 @@ export function moverIndicadorTabs(pastilla, activo, instantaneo = false) {
     height: r.height,
     opacity: 1,
   };
-  if (instantaneo || reducido()) { gsap.set(pastilla, destino); return; }
+  if (instantaneo || sinMovimiento()) { gsap.set(pastilla, destino); return; }
   gsap.to(pastilla, { ...destino, duration: 0.45, ease: EASE.springSoft, overwrite: 'auto' });
   gsap.fromTo(
     pastilla,

@@ -12,7 +12,9 @@ import {
   useToast, vibrate, Avatar, AvatarRing, Header, StatusStrip, RankSkeleton,
   useCountUp, usePullToRefresh, PullIndicator,
 } from '../components/ui';
-import { entradaPodio, capturarFlip, animarFlip, punch, particulasEmoji } from '../lib/anim';
+import {
+  entradaPodio, capturarFlip, animarFlip, punch, particulasEmoji, chispazo, revelarLista,
+} from '../lib/anim';
 import {
   obtenerRankingSemanal, obtenerRankingMensual, obtenerBote,
   obtenerActividadReciente, obtenerUsuariosActivos, enviarHighFive,
@@ -81,6 +83,7 @@ export default function Ranking() {
     const destino = porId[r.usuarioId];
     vibrate(20);
     punch(el, 1.3);
+    chispazo(el, { anillos: 2, tamano: 1.4 });
     particulasEmoji(el, '🖐️', 5);
     try {
       await enviarHighFive(reto.id, usuario, destino);
@@ -137,6 +140,15 @@ export default function Ranking() {
   useEffect(() => {
     if (podio.length) return entradaPodio(podioRef.current);
     return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lista, tab]);
+
+  // El resto de la clasificación entra en cascada; lo que queda debajo del
+  // pliegue espera al scroll. Las filas ya reveladas no vuelven a animarse,
+  // así que al refrescar solo se mueve lo que de verdad cambió.
+  useEffect(() => {
+    if (!lista?.length) return undefined;
+    return revelarLista(listaRef.current, '.rank-row', { cascada: 0.05 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lista, tab]);
 
@@ -236,7 +248,6 @@ export default function Ranking() {
               className={`rank-row ${r.usuarioId === usuario.id ? 'you' : ''}`}
               key={r.usuarioId || r.nombre}
               data-flip-id={r.usuarioId || r.nombre}
-              style={{ animationDelay: `${Math.min(0.3 + i * 0.06, 0.8)}s` }}
             >
               <div className="rank-pos">{i + 4}</div>
               {tab === 'semana'
