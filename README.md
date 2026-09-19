@@ -7,9 +7,9 @@ App del reto del gym (versión **Mixto** y **Damas**) construida con **React + V
 | Pantalla | Qué hace |
 |---|---|
 | **Onboarding** | Eliges tu reto, buscas tu nombre entre los participantes activos y — la primera vez — creas tu contraseña. Después solo la ingresas. La sesión queda guardada en el dispositivo. |
-| **Hoy** | Registro del día: actividad, tiempo, calorías, código de honor. Calcula CUMPLE / NO CUMPLE / JUSTIFICADO con las reglas de tu reto, muestra tu racha, tu semana visual, la zona de peligro de multa y la barra "el equipo hoy" (quiénes ya entrenaron). Al guardar: pantalla de celebración con tu racha y **autopost al feed** con tu actividad y tu nota. |
+| **Hoy** | Registro del día: actividad, tiempo, calorías, código de honor. Calcula CUMPLE / NO CUMPLE / JUSTIFICADO con las reglas de tu reto, muestra tu racha, tu semana visual, la zona de peligro de multa y la barra "el equipo hoy" (quiénes ya entrenaron). Al guardar: pantalla de celebración con tu racha y **autopost al feed** con tu actividad y tu nota. **Funciona sin conexión**: el registro se guarda en el teléfono (caché de Firestore) y se sube solo al volver la señal, aunque cierres la app. |
 | **Historial** | Bitácora completa agrupada por semana con estatus de cada día. |
-| **Ranking** | Clasificación semanal y mensual (se reordena animada con FLIP), bote acumulado, ticker de actividad reciente, anillo de progreso semanal en cada avatar y botón 🖐️ para chocar los cinco (le llega por push). |
+| **Ranking** | Clasificación semanal y mensual (se reordena animada con FLIP), bote acumulado, ticker de actividad reciente y anillo de progreso semanal en cada avatar. |
 | **Stats** | Días totales, rachas, kcal y horas acumuladas (con contadores animados), cumplimiento de las últimas 8 semanas y distribución por actividad. |
 | **Perfil** | Tus datos con anillo de progreso semanal, días de vacaciones/periodo disponibles, tema claro/oscuro, cambio de contraseña y cierre de sesión. |
 

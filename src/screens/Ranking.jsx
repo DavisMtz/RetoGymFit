@@ -1,8 +1,7 @@
 /**
  * Ranking: clasificación semanal/mensual, bote acumulado y actividad reciente.
  * Las filas se reordenan con FLIP al cambiar de pestaña o refrescar, cada
- * avatar lleva su anillo de progreso semanal y puedes chocar los cinco 🖐️
- * a cualquiera (le llega como notificación push).
+ * avatar lleva su anillo de progreso semanal.
  */
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
@@ -13,17 +12,13 @@ import {
   useCountUp, usePullToRefresh, PullIndicator,
 } from '../components/ui';
 import {
-  entradaPodio, capturarFlip, animarFlip, punch, particulasEmoji, chispazo, revelarLista,
+  entradaPodio, capturarFlip, animarFlip, revelarLista,
 } from '../lib/anim';
 import {
   obtenerRankingSemanal, obtenerRankingMensual, obtenerBote,
-  obtenerActividadReciente, obtenerUsuariosActivos, enviarHighFive,
+  obtenerActividadReciente, obtenerUsuariosActivos,
 } from '../data/queries';
 import { hoyMX, semanaISO } from '../lib/dates';
-
-function leerHifives(retoId) {
-  try { return new Set(JSON.parse(localStorage.getItem(`rgf_hifive_${retoId}_${hoyMX()}`)) || []); } catch { return new Set(); }
-}
 
 export default function Ranking() {
   const { reto, usuario } = useAuth();
@@ -34,8 +29,6 @@ export default function Ranking() {
   const [bote, setBote] = useState(null);
   const [ticker, setTicker] = useState([]);
   const [fotos, setFotos] = useState({});     // usuarioId → photoURL
-  const [porId, setPorId] = useState({});     // usuarioId → doc de usuario (authUid)
-  const [hifives, setHifives] = useState(() => leerHifives(reto.id));
   const [girando, setGirando] = useState(false);
   const podioRef = useRef(null);
   const listaRef = useRef(null);
@@ -53,7 +46,6 @@ export default function Ranking() {
       setBote(b);
       setTicker(act);
       setFotos(Object.fromEntries(usuarios.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));
-      setPorId(Object.fromEntries(usuarios.map((u) => [u.id, u])));
     } catch {
       toast('Error al cargar el ranking', true);
       setRanking([]);
@@ -77,24 +69,6 @@ export default function Ranking() {
       flipRef.current = null;
     }
   });
-
-  async function chocarla(r, el) {
-    if (r.usuarioId === usuario.id || hifives.has(r.usuarioId)) return;
-    const destino = porId[r.usuarioId];
-    vibrate(20);
-    punch(el, 1.3);
-    chispazo(el, { anillos: 2, tamano: 1.4 });
-    particulasEmoji(el, '🖐️', 5);
-    try {
-      await enviarHighFive(reto.id, usuario, destino);
-      const nuevo = new Set(hifives).add(r.usuarioId);
-      setHifives(nuevo);
-      try { localStorage.setItem(`rgf_hifive_${reto.id}_${hoyMX()}`, JSON.stringify([...nuevo])); } catch { /* modo privado */ }
-      toast(`🖐️ ¡Chocaste los cinco con ${r.nombre.split(' ')[0]}!`);
-    } catch {
-      toast(destino?.authUid ? 'No se pudo enviar el high-five.' : `${r.nombre.split(' ')[0]} aún no activa su cuenta.`, true);
-    }
-  }
 
   useEffect(() => {
     if (tab === 'mes' && rankingMes === null) {
@@ -224,16 +198,6 @@ export default function Ranking() {
                     <span className="podium-medal">{medallas[pos]}</span>
                     <span className="podium-days">{r.dias}d</span>
                   </div>
-                  {r.usuarioId !== usuario.id && (
-                    <button
-                      className={`hifive-btn podium-hifive ${hifives.has(r.usuarioId) ? 'dado' : ''}`}
-                      type="button"
-                      aria-label={`Chocar los cinco con ${r.nombre}`}
-                      onClick={(e) => chocarla(r, e.currentTarget)}
-                    >
-                      🖐️
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -260,16 +224,6 @@ export default function Ranking() {
                   {r.puntosExtra > 0 && <span className="rank-extra">⭐ +{r.puntosExtra} pto</span>}
                 </div>
               </div>
-              {r.usuarioId !== usuario.id && (
-                <button
-                  className={`hifive-btn ${hifives.has(r.usuarioId) ? 'dado' : ''}`}
-                  type="button"
-                  aria-label={`Chocar los cinco con ${r.nombre}`}
-                  onClick={(e) => chocarla(r, e.currentTarget)}
-                >
-                  🖐️
-                </button>
-              )}
               <div className={`rank-days ${r.dias >= reto.metaDiasSemana ? 'full' : ''}`}>{r.dias}d</div>
             </li>
           ))}

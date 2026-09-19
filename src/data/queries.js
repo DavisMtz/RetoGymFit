@@ -430,30 +430,6 @@ export async function publicarPostRegistro(retoId, usuario, registro, racha) {
   } catch { /* el registro ya quedó guardado; el feed no es crítico */ }
 }
 
-/** High-five 🖐️ a otro participante — le llega como notificación push. */
-export async function enviarHighFive(retoId, deUsuario, paraUsuario) {
-  if (!paraUsuario?.authUid) throw new Error('Sin cuenta activa');
-  if (paraUsuario.authUid === auth.currentUser?.uid) return;
-  await addDoc(col(retoId, 'eventos'), {
-    tipo: 'highfive',
-    deAuthUid: auth.currentUser.uid,
-    deNombre: deUsuario?.nombre || 'Alguien',
-    paraAuthUid: paraUsuario.authUid,
-    detalle: '🖐️',
-    postTexto: '',
-    creadoEn: serverTimestamp(),
-  });
-  crearNotificacion(retoId, {
-    tipo: 'highfive',
-    deUsuarioId: deUsuario?.id || '',
-    deNombre: deUsuario?.nombre || 'Alguien',
-    paraAuthUid: paraUsuario.authUid,
-    detalle: '🖐️',
-    postTexto: '',
-    postId: '',
-  });
-}
-
 /**
  * Notifica a los participantes @mencionados en un comentario (máx. 3).
  * Fire-and-forget: la notificación es cortesía, no bloquea el comentario.

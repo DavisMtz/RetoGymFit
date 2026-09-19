@@ -1097,7 +1097,7 @@ input:disabled { opacity: 0.55; }
 /* ============================================================
    MEJORAS v2.6 — anillo de progreso, skeletons del feed,
    celebración post-registro, partículas, pull-to-refresh,
-   equipo hoy, menciones, high-five, post de registro y tema claro
+   equipo hoy, menciones, post de registro y tema claro
    ============================================================ */
 
 /* ——— Anillo de progreso semanal alrededor del avatar ——— */
@@ -1438,17 +1438,6 @@ body[data-reto='damas'] .pd-marca-mini { background: linear-gradient(135deg, var
 .pd-novale h2 { font-family: var(--display); font-size: 22px; font-weight: 800; margin: 6px 0; }
 .pd-novale p { font-size: 13px; color: var(--text-mid); margin-bottom: 18px; }
 .pd-novale .btn-dark { width: auto; padding: 12px 24px; }
-
-/* ——— High-five ——— */
-.hifive-btn {
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
-  width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
-  font-size: 15px; flex-shrink: 0;
-  transition: background 0.25s var(--spring), border-color 0.25s var(--spring);
-}
-.hifive-btn:active { transform: scale(0.85); }
-.hifive-btn.dado { background: var(--acc-soft); border-color: var(--acc); cursor: default; }
-.podium-hifive { margin-top: 6px; }
 
 /* ——— Post de registro (autopost de actividad) ——— */
 .post-actividad {

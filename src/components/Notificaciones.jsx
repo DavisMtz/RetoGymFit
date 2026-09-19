@@ -8,12 +8,12 @@
  *
  * Fuentes de noticias:
  *  - `notificaciones` dirigidas a ti: reacciones y comentarios en TUS
- *    publicaciones, @menciones y high-fives 🖐️ (en vivo, onSnapshot).
+ *    publicaciones y @menciones (en vivo, onSnapshot).
  *  - Publicaciones y registros nuevos de los DEMÁS, derivados del propio
  *    feed (sin escrituras extra).
  *
  * Tocar una notificación navega a su destino: la publicación exacta en el
- * feed (se resalta) o el ranking en el caso de los high-fives.
+ * feed (se resalta) o el ranking en el caso de los high-fives viejos.
  */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -60,6 +60,9 @@ function construirItems(notifs, posts, miUsuarioId) {
       accion = 'te mencionó en un comentario';
       detalle = n.detalle ? `“${n.detalle}”` : '';
     } else if (n.tipo === 'highfive') {
+      // "Chocar los cinco" se quitó de la app (19/09/2026). Esta rama se queda
+      // solo para que las notificaciones ya enviadas se sigan leyendo bien
+      // hasta que la poda de la bandeja las borre; no se crean nuevas.
       icono = '🖐️';
       accion = 'te chocó los cinco';
       detalle = '¡Tu esfuerzo se nota!';
