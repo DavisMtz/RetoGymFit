@@ -22,6 +22,20 @@ html[data-oro='on'] {
   --oro: #ffc72c;
   --oro-hondo: #b07d12;
 
+  /* EL metal. Un color plano nunca parece oro: lo que el ojo reconoce es el
+     recorrido de la luz sobre una superficie curva — reflejo alto, caída a
+     sombra, segundo reflejo. Una sola definición para las tres piezas que lo
+     llevan; si algún día hay que bajarle el brillo, se toca aquí y ya. */
+  --oro-metal: linear-gradient(160deg,
+    #fff0b8 0%, #ffd75a 18%, #e0a82a 42%, #b3801a 60%, #f2c447 82%, #ffe28e 100%);
+
+  /* Negro CÁLIDO detrás del oro. El negro neutro lo abarata; un fondo con
+     una gota de marrón hace que el metal se vea caro. */
+  --bg: #080705;
+  --surface-1: #120f0a;
+  --surface-2: #17130c;
+  --surface-3: #201a11;
+
   /* El acento de la app pasa de lima a oro. Contraste comprobado:
      #ffc72c sobre #0a0a0a = 12.7:1; texto #1a1405 sobre el oro = 11.7:1. */
   --acc: var(--oro);
@@ -38,13 +52,35 @@ html[data-oro='on'] body[data-reto='damas']::before {
     radial-gradient(ellipse 60% 40% at 90% 110%, rgba(176, 125, 18, 0.08), transparent 60%);
 }
 
-/* El bote: de lima plano a metal con reflejo. */
-html[data-oro='on'] .jackpot {
-  background: linear-gradient(135deg, var(--oro-alto) 0%, var(--oro) 45%, var(--oro-hondo) 100%);
+/* ——— Las TRES piezas de metal ———————————————————————————————————
+   Bote, botón de registrar y distintivo. Ni una más: lo que hace que esto
+   se sienta exclusivo no es cuánto oro hay, sino el contraste entre las
+   pocas piezas pulidas y el oro plano del resto (barra, cifra, chips). Si
+   todo brilla, deja de ser un trofeo y parece una tragamonedas.
+
+   El bisel es la mitad del truco: una línea de luz arriba y una de sombra
+   abajo convierten un relleno en una placa. */
+html[data-oro='on'] .jackpot,
+html[data-oro='on'] .submit-btn {
+  background: var(--oro-metal);
+  background-size: 220% 220%;
+  background-position: 50% 50%;
+  /* La colada: el reflejo recorre la pieza UNA vez al aparecer y se queda
+     quieto. Un metal que brilla en bucle es un banner de publicidad. */
+  animation: oro-colada 1.9s var(--smooth) 0.15s both;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 20px 50px -18px var(--acc-glow);
+}
+
+@keyframes oro-colada {
+  from { background-position: 100% 50%; }
+  to { background-position: 50% 50%; }
 }
 
 /* Las tarjetas apenas se entibian: el borde insinúa el oro, no lo grita. */
-html[data-oro='on'] .card { border-color: rgba(255, 199, 44, 0.18); }
+html[data-oro='on'] .card { border-color: rgba(255, 199, 44, 0.13); }
 
 /* La cifra grande de la semana, en oro sólido. El metal se queda en las
    superficies (el bote, el distintivo): un degradado sobre el TEXTO se lee
@@ -59,13 +95,17 @@ html[data-oro='on'] .hero-stat-num { color: var(--oro); }
   padding: 6px 11px 6px 9px;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(255, 232, 159, 0.16), rgba(176, 125, 18, 0.14));
-  border: 1px solid rgba(255, 199, 44, 0.45);
+  border: 1px solid rgba(255, 199, 44, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   color: var(--oro-alto);
-  font-size: 10px; font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase;
+  /* Monoespaciada y muy espaciada: se lee como una placa grabada y no como
+     una etiqueta de sitio web. */
+  font-family: var(--mono);
+  font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
   white-space: nowrap;
 }
-.lider-chip-corona { font-size: 12px; line-height: 1; }
+.lider-chip-corona { font-size: 11px; line-height: 1; }
 
 /* El reflejo recorre el distintivo cada tanto, como la luz sobre el metal.
    Es decoración pura: sin él, el distintivo se lee igual. */
@@ -86,6 +126,10 @@ html[data-oro='on'] .hero-stat-num { color: var(--oro); }
 
 @media (prefers-reduced-motion: reduce) {
   .lider-chip::after { animation: none; opacity: 0; }
+  /* Sin movimiento el metal se queda quieto, pero sigue siendo metal: el
+     gradiente y el bisel no dependen de la animación. */
+  html[data-oro='on'] .jackpot,
+  html[data-oro='on'] .submit-btn { animation: none; }
 }
 
 /* ——— Tema claro ———————————————————————————————————————————————
@@ -110,8 +154,13 @@ html[data-tema='claro'][data-oro='on'] body[data-reto='damas']::before {
     radial-gradient(ellipse 60% 40% at 90% 110%, rgba(138, 100, 18, 0.05), transparent 60%);
 }
 
-html[data-tema='claro'][data-oro='on'] .jackpot {
-  background: linear-gradient(135deg, #a87a20 0%, #8a6412 55%, #6a4c0c 100%);
+/* Sobre papel el metal NO puede aclararse: encima va texto blanco y las
+   paradas claras lo dejarían ilegible. Se queda el oro hondo, pero con el
+   mismo bisel y la misma colada — el acabado metálico viene del relieve,
+   no del tono. */
+html[data-tema='claro'][data-oro='on'] {
+  --oro-metal: linear-gradient(160deg,
+    #b8912a 0%, #9a7318 20%, #7d5a0f 48%, #6a4c0c 68%, #96700f 88%, #a87a20 100%);
 }
 
 html[data-tema='claro'][data-oro='on'] .card { border-color: rgba(138, 100, 18, 0.22); }
