@@ -12,7 +12,7 @@ import { subirAvatar, borrarAvatar } from '../lib/avatar';
 import { pushDisponible, activarPush, desactivarPush } from '../lib/push';
 import { obtenerTema, guardarTema } from '../lib/tema';
 import { obtenerCorreo, guardarCorreo, correoValido } from '../lib/recuperacion';
-import { prefiereePatrio, guardarPreferencia, patrioEncendido, suscribirPatrio } from '../lib/patrio';
+import { prefiereePatrio, guardarPreferencia, patrioEncendido, suscribirPatrio, suscribirPatrioGlobal } from '../lib/patrio';
 import { esMesPatrio } from '../config/patrio';
 import { silenciarAvisoCorreo } from '../components/CorreoBanner';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
@@ -47,14 +47,18 @@ export default function Perfil() {
   const [guardandoCorreo, setGuardandoCorreo] = useState(false);
   const [patrio, setPatrio] = useState(prefiereePatrio);               // tu preferencia
   const [patrioVisible, setPatrioVisible] = useState(patrioEncendido); // lo que se ve
+  const [patrioGlobal, setPatrioGlobal] = useState(true);              // el interruptor del admin
 
   // Tu preferencia y lo que de verdad se ve no son lo mismo: el admin puede
-  // tener el tema apagado para todo el reto. La fila muestra las dos cosas en
-  // vez de prometer una fiesta que no está pasando.
+  // tener el tema apagado para todo el reto.
   useEffect(() => suscribirPatrio(setPatrioVisible), []);
+  // Y si el admin lo apagó para todos, esta fila ni siquiera se ofrece:
+  // encenderla no encendería nada. Se escucha en vivo, así que desaparece
+  // (o vuelve) sin tener que reabrir la app.
+  useEffect(() => suscribirPatrioGlobal(setPatrioGlobal), []);
 
-  // Solo se ofrece en septiembre: fuera del mes patrio la fila no aplica.
-  const enMesPatrio = esMesPatrio(hoyMX());
+  // Solo se ofrece en septiembre, y solo si el admin no lo apagó para todos.
+  const enMesPatrio = esMesPatrio(hoyMX()) && patrioGlobal;
 
   function togglePatrio() {
     vibrate(15);
@@ -65,6 +69,8 @@ export default function Perfil() {
     if (!nuevo) toast('Tema patrio desactivado');
     else toast(encendido
       ? 'Tema patrio activado 🇲🇽'
+      // Red de seguridad: la fila ya no se muestra si el admin lo apagó,
+      // pero si llegara a tocarse en ese instante, el aviso no miente.
       : 'Activado en tu perfil, pero está apagado para todo el reto');
   }
 
@@ -323,9 +329,7 @@ export default function Perfil() {
               <span className="pr-sub">
                 {!patrio
                   ? 'Desactivado · toca para volver a la fiesta'
-                  : patrioVisible
-                    ? 'Septiembre en verde, blanco y rojo · toca para quitarlo'
-                    : 'Activado en tu perfil, pero apagado para todo el reto'}
+                  : 'Septiembre en verde, blanco y rojo · toca para quitarlo'}
               </span>
             </span>
           </button>

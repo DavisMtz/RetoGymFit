@@ -38,6 +38,25 @@ let globalActivo = true;
 /* ── quién quiere enterarse de que el tema cambió ───────────────────── */
 
 const oyentes = new Set();
+/** Aparte: quién quiere saber si el ADMIN lo tiene encendido para el reto. */
+const oyentesGlobal = new Set();
+
+/**
+ * Se suscribe al interruptor del admin (no al tema en sí). Avisa con el
+ * valor actual al suscribirse. Son dos cosas distintas y por eso hay dos
+ * suscripciones: el tema puede estar apagado porque TÚ lo apagaste, con el
+ * del admin encendido. Perfil necesita saber cuál de las dos manda para no
+ * ofrecer un interruptor que no encendería nada.
+ */
+export function suscribirPatrioGlobal(fn) {
+  oyentesGlobal.add(fn);
+  fn(globalActivo);
+  return () => { oyentesGlobal.delete(fn); };
+}
+
+function avisarGlobal() {
+  oyentesGlobal.forEach((avisar) => avisar(globalActivo));
+}
 
 /** Se suscribe a los cambios del tema. Devuelve la baja, para el cleanup. */
 export function suscribirPatrio(fn) {
@@ -88,6 +107,7 @@ export async function patrioGlobalActivo(retoId) {
 /** Solo el admin: enciende o apaga el tema en UN reto. */
 export async function fijarPatrioGlobal(retoId, activo) {
   globalActivo = Boolean(activo);
+  avisarGlobal();
   await setDoc(doc(db, 'retos', retoId), { temaPatrio: Boolean(activo) }, { merge: true });
 }
 
@@ -107,6 +127,7 @@ export async function fijarPatrioTodos(activo) {
   });
   await lote.commit();
   globalActivo = Boolean(activo);
+  avisarGlobal();
 }
 
 /**
@@ -165,12 +186,13 @@ export function vigilarPatrio(retoId) {
     decidirPatrio(hoy, { global: globalActivo, personal: prefiereePatrio() }),
   );
   // Fuera de septiembre no hay tema que valga: ni listener hace falta.
-  if (!esMesPatrio(hoy)) { globalActivo = true; aplicar(); return () => {}; }
+  if (!esMesPatrio(hoy)) { globalActivo = true; avisarGlobal(); aplicar(); return () => {}; }
   return onSnapshot(
     doc(db, 'retos', retoId),
     (snap) => {
       // Sin documento o sin el campo: encendido. Solo un false explícito apaga.
       globalActivo = snap.exists() ? snap.data().temaPatrio !== false : true;
+      avisarGlobal();
       aplicar();
     },
     () => { aplicar(); }, // sin red: seguimos con lo último que se supo
