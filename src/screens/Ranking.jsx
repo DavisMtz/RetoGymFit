@@ -19,6 +19,7 @@ import {
   obtenerActividadReciente, obtenerUsuariosActivos,
 } from '../data/queries';
 import { hoyMX, semanaISO } from '../lib/dates';
+import { evaluarOro } from '../lib/oro';
 
 export default function Ranking() {
   const { reto, usuario } = useAuth();
@@ -43,6 +44,7 @@ export default function Ranking() {
         obtenerUsuariosActivos(reto.id),
       ]);
       setRanking(sem);
+      evaluarOro(sem, usuario); // tema oro del líder de la semana
       setBote(b);
       setTicker(act);
       setFotos(Object.fromEntries(usuarios.filter((u) => u.photoURL).map((u) => [u.id, u.photoURL])));

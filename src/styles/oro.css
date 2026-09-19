@@ -1,0 +1,126 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMA ORO — para quien va PRIMERO en la semana
+   Se activa con html[data-oro='on'] (ver src/lib/oro.js).
+
+   El criterio es el mismo del tema patrio: la app no se vuelve un lingote.
+   Conserva su base oscura, su tipografía y su estructura; lo que cambia es
+   el acento (lima → oro), el reflejo del fondo y tres detalles de metal —el
+   distintivo de la cabecera, el brillo del bote y la cifra de la semana—.
+   Un dorado a pantalla completa se leería como estafa, no como primer lugar.
+
+   Este archivo se importa DESPUÉS de patrio.css a propósito: en septiembre
+   los dos redefinen --acc con la misma especificidad y manda el último. El
+   oro se queda con el acento; el papel picado sigue colgado igual.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+html[data-oro='on'] {
+  /* Tres tonos de un mismo oro, no un amarillo. El claro es el reflejo, el
+     hondo es la sombra del metal: juntos dan el degradado que hace que se
+     vea pulido. Ojo: --gold (#ffd84d) es el amarillo de la MEDALLA del
+     podio, no este oro — son cosas distintas y no deben mezclarse. */
+  --oro-alto: #f5e0a3;
+  --oro: #e4be63;
+  --oro-hondo: #a87a20;
+
+  /* El acento de la app pasa de lima a oro. Contraste comprobado:
+     #e4be63 sobre #0a0a0a = 11.2:1; texto #1a1405 sobre el oro = 10.3:1. */
+  --acc: var(--oro);
+  --acc-soft: #e4be631f;
+  --acc-glow: #e4be6340;
+  --on-acc: #1a1405;
+}
+
+/* Fondo: el reflejo lima se vuelve oro, un poco más cálido abajo. */
+html[data-oro='on'] body::before,
+html[data-oro='on'] body[data-reto='damas']::before {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(228, 190, 99, 0.10), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 90% 110%, rgba(168, 122, 32, 0.07), transparent 60%);
+}
+
+/* El bote: de lima plano a metal con reflejo. */
+html[data-oro='on'] .jackpot {
+  background: linear-gradient(135deg, var(--oro-alto) 0%, var(--oro) 45%, var(--oro-hondo) 100%);
+}
+
+/* Las tarjetas apenas se entibian: el borde insinúa el oro, no lo grita. */
+html[data-oro='on'] .card { border-color: rgba(228, 190, 99, 0.2); }
+
+/* La cifra grande de la semana, en oro sólido. El metal se queda en las
+   superficies (el bote, el distintivo): un degradado sobre el TEXTO se lee
+   barato justo en la pantalla que debería verse cara. */
+html[data-oro='on'] .hero-stat-num { color: var(--oro-alto); }
+
+/* ——— Distintivo de la cabecera ———————————————————————————————————
+   Lo monta el Header solo cuando el tema está encendido (ui.jsx). */
+
+.lider-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 11px 6px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(245, 224, 163, 0.16), rgba(168, 122, 32, 0.12));
+  border: 1px solid rgba(228, 190, 99, 0.45);
+  color: var(--oro-alto);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.lider-chip-corona { font-size: 12px; line-height: 1; }
+
+/* El reflejo recorre el distintivo cada tanto, como la luz sobre el metal.
+   Es decoración pura: sin él, el distintivo se lee igual. */
+.lider-chip::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  background-size: 300% 100%;
+  animation: lustre 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.lider-chip { position: relative; overflow: hidden; }
+
+@keyframes lustre {
+  0%, 55% { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lider-chip::after { animation: none; opacity: 0; }
+}
+
+/* ——— Tema claro ———————————————————————————————————————————————
+   El oro claro de arriba no se sostiene sobre papel: sobre #f4f4ee daría
+   3.9:1 y el texto pequeño no se leería. Se baja a un oro viejo (4.9:1). */
+
+html[data-tema='claro'][data-oro='on'] {
+  --oro-alto: #d8b45f;
+  --oro: #8a6412;
+  --oro-hondo: #6a4c0c;
+
+  --acc: var(--oro);
+  --acc-soft: #8a641216;
+  --acc-glow: #8a641238;
+  --on-acc: #ffffff;
+}
+
+html[data-tema='claro'][data-oro='on'] body::before,
+html[data-tema='claro'][data-oro='on'] body[data-reto='damas']::before {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(138, 100, 18, 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 110%, rgba(138, 100, 18, 0.05), transparent 60%);
+}
+
+html[data-tema='claro'][data-oro='on'] .jackpot {
+  background: linear-gradient(135deg, #a87a20 0%, #8a6412 55%, #6a4c0c 100%);
+}
+
+html[data-tema='claro'][data-oro='on'] .card { border-color: rgba(138, 100, 18, 0.22); }
+
+/* Sobre papel, el oro claro se lava: la cifra usa el oro hondo. */
+html[data-tema='claro'][data-oro='on'] .hero-stat-num { color: var(--oro); }
+
+html[data-tema='claro'][data-oro='on'] .lider-chip {
+  background: linear-gradient(135deg, rgba(138, 100, 18, 0.12), rgba(106, 76, 12, 0.08));
+  border-color: rgba(138, 100, 18, 0.4);
+  color: #6a4c0c;
+}

@@ -8,6 +8,7 @@ import PapelPicado from './components/PapelPicado';
 import PatrioBienvenida from './components/PatrioBienvenida';
 import AvisoFotos from './components/AvisoFotos';
 import { drenarCola } from './lib/sheets';
+import { aplicarOro, apagarOro } from './lib/oro';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
 import { vigilarPatrio, apagarPatrio, suscribirPatrio, yaVioBienvenida } from './lib/patrio';
@@ -145,6 +146,15 @@ function Shell() {
     if (autenticado && !esAdmin && !previo.current) setIntro(true);
     previo.current = autenticado;
   }, [autenticado, esAdmin]);
+
+  // Tema oro (líder de la semana). Aquí solo se APAGA —al salir y en el
+  // panel de admin— y se enciende el interruptor manual del admin, que se
+  // sabe sin consultar nada. Quién va primero lo resuelven Hoy y Ranking
+  // con el ranking semanal que ya cargan (ver src/lib/oro.js).
+  useEffect(() => {
+    if (!autenticado || esAdmin || !usuario) { apagarOro(); return; }
+    if (usuario.temaOro === true) aplicarOro(true);
+  }, [autenticado, esAdmin, usuario]);
 
   // Tema del reto en el body + drenar cola de sincronización a Sheets
   useEffect(() => {

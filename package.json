@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/patrio.test.mjs"
+    "test": "node test/patrio.test.mjs && node test/oro.test.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
