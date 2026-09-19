@@ -18,15 +18,15 @@ html[data-oro='on'] {
      hondo es la sombra del metal: juntos dan el degradado que hace que se
      vea pulido. Ojo: --gold (#ffd84d) es el amarillo de la MEDALLA del
      podio, no este oro — son cosas distintas y no deben mezclarse. */
-  --oro-alto: #f5e0a3;
-  --oro: #e4be63;
-  --oro-hondo: #a87a20;
+  --oro-alto: #ffe89f;
+  --oro: #ffc72c;
+  --oro-hondo: #b07d12;
 
   /* El acento de la app pasa de lima a oro. Contraste comprobado:
-     #e4be63 sobre #0a0a0a = 11.2:1; texto #1a1405 sobre el oro = 10.3:1. */
+     #ffc72c sobre #0a0a0a = 12.7:1; texto #1a1405 sobre el oro = 11.7:1. */
   --acc: var(--oro);
-  --acc-soft: #e4be631f;
-  --acc-glow: #e4be6340;
+  --acc-soft: #ffc72c1f;
+  --acc-glow: #ffc72c40;
   --on-acc: #1a1405;
 }
 
@@ -34,8 +34,8 @@ html[data-oro='on'] {
 html[data-oro='on'] body::before,
 html[data-oro='on'] body[data-reto='damas']::before {
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(228, 190, 99, 0.10), transparent 62%),
-    radial-gradient(ellipse 60% 40% at 90% 110%, rgba(168, 122, 32, 0.07), transparent 60%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 199, 44, 0.10), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 90% 110%, rgba(176, 125, 18, 0.08), transparent 60%);
 }
 
 /* El bote: de lima plano a metal con reflejo. */
@@ -44,12 +44,12 @@ html[data-oro='on'] .jackpot {
 }
 
 /* Las tarjetas apenas se entibian: el borde insinúa el oro, no lo grita. */
-html[data-oro='on'] .card { border-color: rgba(228, 190, 99, 0.2); }
+html[data-oro='on'] .card { border-color: rgba(255, 199, 44, 0.18); }
 
 /* La cifra grande de la semana, en oro sólido. El metal se queda en las
    superficies (el bote, el distintivo): un degradado sobre el TEXTO se lee
    barato justo en la pantalla que debería verse cara. */
-html[data-oro='on'] .hero-stat-num { color: var(--oro-alto); }
+html[data-oro='on'] .hero-stat-num { color: var(--oro); }
 
 /* ——— Distintivo de la cabecera ———————————————————————————————————
    Lo monta el Header solo cuando el tema está encendido (ui.jsx). */
@@ -58,8 +58,8 @@ html[data-oro='on'] .hero-stat-num { color: var(--oro-alto); }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 11px 6px 9px;
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(245, 224, 163, 0.16), rgba(168, 122, 32, 0.12));
-  border: 1px solid rgba(228, 190, 99, 0.45);
+  background: linear-gradient(135deg, rgba(255, 232, 159, 0.16), rgba(176, 125, 18, 0.14));
+  border: 1px solid rgba(255, 199, 44, 0.45);
   color: var(--oro-alto);
   font-size: 10px; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase;
