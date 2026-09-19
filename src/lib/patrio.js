@@ -18,10 +18,11 @@
  * Antes solo quitaba el atributo: el papel picado se quedaba colgado y encima
  * sin el padding que le hacía hueco, así que terminaba tapando la cabecera.
  */
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX } from './dates';
 import { esMesPatrio, decidirPatrio, CONFETI_PATRIO } from '../config/patrio';
+import { RETOS } from '../config/retos';
 
 const KEY_PREF = 'rgf_patrio_v1';   // 'on' | 'off' — preferencia personal
 const KEY_VISTO = 'rgf_patrio_visto_v1'; // año en que ya vio el modal
@@ -84,10 +85,46 @@ export async function patrioGlobalActivo(retoId) {
   }
 }
 
-/** Solo el admin: enciende o apaga el tema para todo el reto. */
+/** Solo el admin: enciende o apaga el tema en UN reto. */
 export async function fijarPatrioGlobal(retoId, activo) {
   globalActivo = Boolean(activo);
   await setDoc(doc(db, 'retos', retoId), { temaPatrio: Boolean(activo) }, { merge: true });
+}
+
+/**
+ * Solo el admin: enciende o apaga el tema en TODOS los retos de una vez.
+ *
+ * El interruptor del panel era por reto y eso se prestaba a un malentendido
+ * caro: apagarlo en Mixto no tocaba a Damas, cuyo documento ni siquiera
+ * existía, así que la mitad del grupo seguía viendo el papel picado y
+ * parecía que el interruptor no servía. Un solo lote deja a los dos retos
+ * en el mismo estado, sin pasos intermedios.
+ */
+export async function fijarPatrioTodos(activo) {
+  const lote = writeBatch(db);
+  Object.keys(RETOS).forEach((retoId) => {
+    lote.set(doc(db, 'retos', retoId), { temaPatrio: Boolean(activo) }, { merge: true });
+  });
+  await lote.commit();
+  globalActivo = Boolean(activo);
+}
+
+/**
+ * Estado EN VIVO del interruptor en cada reto, para el panel de admin:
+ * llama a cb con { mixto: true, damas: false }. Un reto sin documento (o sin
+ * el campo) cuenta como encendido, igual que en la app. Devuelve la baja.
+ */
+export function vigilarPatrioTodos(cb) {
+  const estado = {};
+  const bajas = Object.keys(RETOS).map((retoId) => onSnapshot(
+    doc(db, 'retos', retoId),
+    (snap) => {
+      estado[retoId] = snap.exists() ? snap.data().temaPatrio !== false : true;
+      cb({ ...estado });
+    },
+    () => { /* sin red: el panel se queda con lo último que supo */ },
+  ));
+  return () => bajas.forEach((baja) => baja());
 }
 
 /* ── aplicación ─────────────────────────────────────────────────────── */

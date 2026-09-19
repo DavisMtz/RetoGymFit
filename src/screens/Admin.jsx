@@ -18,7 +18,7 @@ import {
 } from '../data/queries';
 import { sincronizarRegistroAdmin, borrarRegistroSheet } from '../lib/sheets';
 import { hoyMX } from '../lib/dates';
-import { patrioGlobalActivo, fijarPatrioGlobal } from '../lib/patrio';
+import { fijarPatrioTodos, vigilarPatrioTodos } from '../lib/patrio';
 import { esMesPatrio } from '../config/patrio';
 
 const ESTATUS = ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO'];
@@ -129,7 +129,7 @@ export default function Admin() {
   const [modalSalir, setModalSalir] = useState(false);
   const [pago, setPago] = useState({ fecha: hoyMX(), usuario: '', monto: '', notas: '' });
   const [enviando, setEnviando] = useState(false);
-  const [patrioGlobal, setPatrioGlobal] = useState(true);   // interruptor del tema patrio
+  const [patrioPorReto, setPatrioPorReto] = useState(null); // { mixto: true, damas: false }
   const [patrioCargando, setPatrioCargando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -163,25 +163,32 @@ export default function Admin() {
     }
   }, [retoId, toast]);
 
-  // El tema patrio se puede apagar para TODO el reto desde aquí. Vive en el
-  // documento retos/{retoId}, que ya es legible por cualquier autenticado y
-  // escribible solo por el admin: no hizo falta tocar firestore.rules.
-  useEffect(() => {
-    let activo = true;
-    patrioGlobalActivo(retoId).then((v) => { if (activo) setPatrioGlobal(v); });
-    return () => { activo = false; };
-  }, [retoId]);
+  // El tema patrio se apaga para TODOS los retos desde aquí (campo
+  // `temaPatrio` en cada retos/{retoId}: legible por cualquier autenticado y
+  // escribible solo por el admin, no hizo falta tocar firestore.rules).
+  // El estado se escucha EN VIVO: así el panel muestra lo que de verdad hay
+  // guardado, aunque se cambie desde otro dispositivo.
+  useEffect(() => vigilarPatrioTodos(setPatrioPorReto), []);
+
+  // Encendido solo si lo está en TODOS. Si quedó a medias (encendido en uno
+  // y apagado en otro), el interruptor apaga: lo que el admin quiere de un
+  // botón que dice "todos" es que nadie lo vea.
+  const retosPatrio = patrioPorReto ? Object.entries(patrioPorReto) : [];
+  const patrioEnAlguno = retosPatrio.some(([, v]) => v);
+  const patrioEnTodos = retosPatrio.length > 0 && retosPatrio.every(([, v]) => v);
+  const patrioAMedias = patrioEnAlguno && !patrioEnTodos;
 
   async function togglePatrioGlobal() {
-    if (patrioCargando) return;
+    if (patrioCargando || patrioPorReto === null) return;
     setPatrioCargando(true);
-    const nuevo = !patrioGlobal;
+    const nuevo = !patrioEnAlguno; // si alguien lo ve, el botón apaga
     try {
-      await fijarPatrioGlobal(retoId, nuevo);
-      setPatrioGlobal(nuevo);
-      toast(nuevo ? 'Tema patrio activado para todo el reto' : 'Tema patrio desactivado para todo el reto');
-    } catch {
-      toast('No se pudo cambiar. Revisa tu conexión.');
+      await fijarPatrioTodos(nuevo);
+      toast(nuevo
+        ? 'Tema patrio activado en todos los retos'
+        : 'Tema patrio apagado en todos los retos');
+    } catch (err) {
+      toast(`No se pudo cambiar${err?.code ? ` (${err.code})` : ''}. Intenta de nuevo.`, true);
     } finally {
       setPatrioCargando(false);
     }
@@ -378,19 +385,33 @@ export default function Admin() {
       {esMesPatrio(hoyMX()) && (
         <section className="card">
           <div className="card-head"><h2 className="card-title">Mes patrio</h2></div>
-          <button className="pref-row" type="button" onClick={togglePatrioGlobal} disabled={patrioCargando}>
-            <span className="pr-icon">{patrioGlobal ? '🇲🇽' : '🚫'}</span>
+          <button
+            className="pref-row"
+            type="button"
+            onClick={togglePatrioGlobal}
+            disabled={patrioCargando || patrioPorReto === null}
+          >
+            <span className="pr-icon">{patrioEnAlguno ? '🇲🇽' : '🚫'}</span>
             <span className="pr-text">
-              <span className="pr-title">Tema patrio para todo el reto</span>
+              <span className="pr-title">Tema patrio · todos los retos</span>
               <span className="pr-sub">
-                {patrioCargando
-                  ? 'Guardando…'
-                  : patrioGlobal
-                    ? `Encendido en ${reto.nombre} · toca para apagarlo a todos`
-                    : `Apagado en ${reto.nombre} · nadie lo ve, aunque lo activen en su perfil`}
+                {patrioPorReto === null && 'Consultando…'}
+                {patrioPorReto !== null && patrioCargando && 'Guardando…'}
+                {patrioPorReto !== null && !patrioCargando && patrioEnTodos
+                  && 'Encendido para todos · toca para apagarlo a todo el mundo'}
+                {patrioPorReto !== null && !patrioCargando && patrioAMedias
+                  && `A medias (${retosPatrio.filter(([, v]) => v).map(([id]) => getReto(id).nombre).join(', ')} lo ve) · toca para apagarlo a todos`}
+                {patrioPorReto !== null && !patrioCargando && !patrioEnAlguno
+                  && 'Apagado para todos · nadie lo ve, aunque lo activen en su perfil'}
               </span>
             </span>
           </button>
+          {patrioPorReto !== null && (
+            <div className="admin-nota">
+              Un solo interruptor para {retosPatrio.map(([id]) => getReto(id).nombre).join(' y ')}.
+              Los teléfonos que ya estén abiertos lo apagan en el momento.
+            </div>
+          )}
         </section>
       )}
 

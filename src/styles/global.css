@@ -417,6 +417,10 @@ input:disabled { opacity: 0.55; }
    pastilla "Sin conexión", para que se lean como la misma situación. */
 .pendiente-nota { display: flex; align-items: flex-start; gap: 8px; max-width: 320px; margin: 12px auto 16px; font-size: 12.5px; line-height: 1.5; color: var(--text-mid); text-align: left; }
 .done-state .pendiente-nota { margin: 12px auto 16px; font-size: 12.5px; }
+/* Nota al pie de un ajuste del panel de admin: explica el alcance sin
+   competir con el propio interruptor. */
+.admin-nota { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.5; color: var(--text-low); }
+
 .pendiente-dot { flex: none; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--warn); animation: blink 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .pendiente-dot { animation: none; } }
 
