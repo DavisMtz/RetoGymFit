@@ -20,7 +20,6 @@ import {
   popEnCascada, chispazo, dibujarTrazo,
 } from '../lib/anim';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
-import { evaluarOro } from '../lib/oro';
 
 const FRASES = {
   urgencia: [
@@ -298,8 +297,6 @@ export default function Hoy() {
     // Semana visual a partir del historial
     const semanaCalc = diasDeSemana(hoyMX()).map((fecha) => ({ fecha, estatus: dias[fecha] || 'sin registro' }));
     setSemana(semanaCalc);
-    // Tema oro: lo decide el mismo ranking que ya trajimos (ver lib/oro.js)
-    evaluarOro(ranking, usuario);
     const mio = ranking.find((r) => r.usuarioId === usuario.id);
     const diasCalc = mio ? mio.dias : 0;
     setDiasSemana(diasCalc);

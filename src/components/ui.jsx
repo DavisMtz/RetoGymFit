@@ -5,7 +5,6 @@ import {
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { suscribirOro } from '../lib/oro';
 import { DIAS_CORTOS, hoyMX, semanaISO, diasHasta } from '../lib/dates';
 import {
   abrirAvatar, punch, contarHasta, moverIndicadorTabs, introCinematica, revelarSemana,
@@ -104,10 +103,6 @@ export function ToastProvider({ children }) {
 export function Header({ reto }) {
   const { usuario } = useAuth();
   const [reglas, setReglas] = useState(false);
-  // El distintivo del líder va colgado del tema oro, no de su propio
-  // cálculo: así nunca puede aparecer sin el tema ni quedarse sin él.
-  const [oro, setOro] = useState(false);
-  useEffect(() => suscribirOro(setOro), []);
   return (
     <header className="header">
       <NavLink to="/perfil" className="brand" onClick={() => vibrate(12)} aria-label="Ir a tu perfil">
@@ -121,12 +116,6 @@ export function Header({ reto }) {
         </div>
       </NavLink>
       <div className="header-actions">
-        {oro && (
-          <span className="lider-chip" title="Vas primero en la semana">
-            <span className="lider-chip-corona" aria-hidden="true">👑</span>
-            Líder
-          </span>
-        )}
         <NotiCampana />
         <button className="rules-pill" type="button" onClick={() => { vibrate(15); setReglas(true); }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z" /></svg>

@@ -4,7 +4,6 @@ import App from './App';
 import './styles/fonts.css';
 import './styles/global.css';
 import './styles/patrio.css';
-import './styles/oro.css';
 import { obtenerTema, aplicarTema } from './lib/tema';
 
 // Aplica el tema guardado ANTES del primer render para evitar el destello

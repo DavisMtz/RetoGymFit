@@ -213,23 +213,6 @@ export default function Admin() {
     }
   }
 
-  /**
-   * Enciende o apaga a mano el TEMA ORO de un participante (campo `temaOro`).
-   * Es para probarlo: no lo hace líder ni toca el ranking — solo pinta su
-   * app de oro. El participante lo ve al volver a abrirla, porque su
-   * documento se lee una vez al entrar.
-   */
-  async function cambiarOro(u) {
-    const nuevo = !(u.temaOro === true);
-    try {
-      await adminActualizarUsuario(retoId, u.id, { temaOro: nuevo });
-      setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, temaOro: nuevo } : x)));
-      toast(nuevo ? `👑 Tema oro encendido para ${u.nombre.split(' ')[0]}` : 'Tema oro apagado');
-    } catch {
-      toast('No se pudo cambiar el tema oro.', true);
-    }
-  }
-
   async function cambiarEstado(u) {
     const nuevo = u.estado === 'Activo' ? 'Baja' : 'Activo';
     try {
@@ -428,7 +411,6 @@ export default function Admin() {
                 <span>
                   {u.estado === 'Activo' ? `${diasSemana[u.id] || 0}d esta semana` : 'De baja'}
                   {u.hasPassword ? ' · cuenta activa' : ' · sin contraseña'}
-                  {u.temaOro === true ? ' · 👑 oro forzado' : ''}
                 </span>
               </div>
               <span className={`chip-estatus ${u.estado === 'Activo' ? 'cumple' : 'nocumple'}`}>{u.estado}</span>
@@ -441,9 +423,6 @@ export default function Admin() {
                   </button>
                   <button className="admin-btn" type="button" onClick={() => { vibrate(); cambiarEstado(u); }}>
                     {u.estado === 'Activo' ? '⏸ Dar de baja' : '▶ Reactivar'}
-                  </button>
-                  <button className="admin-btn" type="button" onClick={() => { vibrate(); cambiarOro(u); }}>
-                    {u.temaOro === true ? '👑 Quitar tema oro' : '👑 Tema oro (prueba)'}
                   </button>
                   {u.hasPassword && (
                     <button className="admin-btn" type="button" onClick={() => { vibrate(); setModalReset(u); }}>
