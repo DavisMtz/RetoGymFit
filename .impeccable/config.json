@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "var(--spring)",
+        "createdAt": "2026-09-19T21:56:48.586Z",
+        "reason": "Token de movimiento del proyecto: --spring es la curva base del sistema y sus gemelas en GSAP (CustomEase 'rgf-spring') la copian; cambiarla desincronizaría CSS y GSAP"
+      }
+    ]
+  }
+}
