@@ -77,12 +77,18 @@ self.addEventListener('fetch', (event) => {
   // Solo mismo origen: Firestore/Auth/Storage van directo a la red
   if (url.origin !== self.location.origin) return;
 
-  // Navegaciones: red primero (SPA fresca), caché como respaldo offline
+  // Navegaciones: red primero (SPA fresca), caché como respaldo offline.
+  // Con tope: en un WiFi sin salida a internet la petición no falla, se
+  // cuelga — y la app no abriría para registrar. Pasado el tope se sirve la
+  // copia guardada (si no hay copia, se sigue esperando a la red).
   if (request.mode === 'navigate') {
+    const red = fetch(request)
+      .then((res) => { caches.open(CACHE).then((c) => c.put('/', res.clone())); return res; });
+    const tope = new Promise((resolve) => { setTimeout(resolve, 3500); })
+      .then(() => caches.match('/'))
+      .then((cacheada) => cacheada || red);
     event.respondWith(
-      fetch(request)
-        .then((res) => { caches.open(CACHE).then((c) => c.put('/', res.clone())); return res; })
-        .catch(() => caches.match('/')),
+      Promise.race([red, tope]).catch(() => caches.match('/')),
     );
     return;
   }

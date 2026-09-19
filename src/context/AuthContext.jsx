@@ -44,6 +44,7 @@ export function AuthProvider({ children }) {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [sesion, setSesion] = useState(leerSesion); // { retoId, usuarioId }
   const [usuario, setUsuario] = useState(null);     // doc del participante
+  const [reintento, setReintento] = useState(0);    // sube al volver la red tras un fallo de carga
   const reto = sesion ? getReto(sesion.retoId) : null;
 
   // Tope de arranque: si Firebase no responde (sin red, config incompleta),
@@ -83,14 +84,22 @@ export function AuthProvider({ children }) {
         else { localStorage.removeItem(SESSION_KEY); setSesion(null); setUsuario(null); }
         return;
       }
-      const u = await obtenerUsuario(sesion.retoId, sesion.usuarioId);
+      let u;
+      try {
+        u = await obtenerUsuario(sesion.retoId, sesion.usuarioId);
+      } catch {
+        // Sin red y sin el perfil en la caché: NO se borra la sesión (sigue
+        // siendo válida); se reintenta en cuanto vuelva la conexión.
+        if (activo) window.addEventListener('online', () => setReintento((n) => n + 1), { once: true });
+        return;
+      }
       if (!activo) return;
       // La sesión solo es válida si este dispositivo es dueño del perfil
       if (u && u.authUid === firebaseUser.uid && u.estado === 'Activo') setUsuario(u);
       else { localStorage.removeItem(SESSION_KEY); setSesion(null); setUsuario(null); }
     })();
     return () => { activo = false; };
-  }, [sesion, firebaseUser]);
+  }, [sesion, firebaseUser, reintento]);
 
   /**
    * Primera vez: crear contraseña y reclamar el perfil. Las reglas de

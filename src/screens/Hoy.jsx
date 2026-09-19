@@ -10,7 +10,7 @@ import { coloresCelebracion } from '../lib/patrio';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots, getInitials, useCountUp } from '../components/ui';
 import {
-  obtenerRegistroHoy, guardarRegistro, contarPorTipo,
+  obtenerRegistroHoy, guardarRegistro, contarPorTipo, esperarEnvioPendiente,
   obtenerHistorial, obtenerRankingSemanal,
   obtenerQuienesEntrenaronHoy, obtenerUsuariosActivos, publicarPostRegistro,
 } from '../data/queries';
@@ -93,6 +93,7 @@ function Celebracion({ reto, datos, onCerrar }) {
       msg = `Día ${dias} de ${meta} esta semana. La constancia paga — tu equipo ya lo vio.`;
     }
   }
+  const sinSenal = Boolean(datos?.sinSenal);
 
   return (
     <div className={`celebra-overlay ${datos ? 'show' : ''}`} role="dialog" aria-modal="true" aria-label="Registro guardado">
@@ -101,6 +102,12 @@ function Celebracion({ reto, datos, onCerrar }) {
           <div className={`celebra-icono ${justificado ? 'justificado' : ''}`}>{icono}</div>
           <h2 className="celebra-titulo celebra-anim">{titulo}</h2>
           <p className="celebra-msg celebra-anim">{msg}</p>
+          {sinSenal && (
+            <p className="pendiente-nota celebra-anim">
+              <span className="pendiente-dot" />
+              Sin señal: quedó guardado en tu teléfono y se envía solo cuando vuelva la conexión.
+            </p>
+          )}
           <div className="celebra-stats celebra-anim">
             <div className="celebra-stat">
               <b>{rachaAnim == null ? datos.racha : Math.round(rachaAnim)}</b>
@@ -258,6 +265,9 @@ export default function Hoy() {
   const [enviando, setEnviando] = useState(false);
   const [modalWA, setModalWA] = useState(null); // { url }
 
+  // Fechas cumplidas de la última carga: sin señal, la celebración se
+  // calcula con ellas en vez de esperar a que Firestore caiga a su caché.
+  const cumplidasRef = useRef([]);
   const tituloRef = useRef(null);
   const barraRef = useRef(null);
   const llamaRef = useRef(null);
@@ -279,6 +289,7 @@ export default function Hoy() {
     ]);
     setRegistroHoy(regHoy);
     const cumplidas = historial.filter((r) => r.estatus === 'CUMPLE' || r.estatus === 'JUSTIFICADO').map((r) => r.fecha);
+    cumplidasRef.current = cumplidas;
     const rachaCalc = calcularRacha(cumplidas);
     setRacha(rachaCalc);
     const dias = {};
@@ -312,10 +323,29 @@ export default function Hoy() {
       setPosicion(null);
     }
     // Valores frescos para quien los necesite justo después de guardar
-    return { racha: rachaCalc, dias: diasCalc, semana: semanaCalc };
+    return { racha: rachaCalc, dias: diasCalc, semana: semanaCalc, registroHoy: regHoy };
   }, [reto, usuario]);
 
   useEffect(() => { cargar().catch(() => toast('Error al cargar tus datos', true)); }, [cargar, toast]);
+
+  // Registro guardado sin señal (en esta visita o en una anterior): en
+  // cuanto Firestore lo sube, se recarga para quitar el aviso de pendiente.
+  // Si el servidor lo rechazó (ya había uno de hoy desde otro teléfono o del
+  // admin), Firestore deshace la copia local y la tarjeta vuelve a su estado real.
+  const pendienteHoy = Boolean(registroHoy?.pendiente);
+  useEffect(() => {
+    if (!pendienteHoy) return undefined;
+    let vivo = true;
+    esperarEnvioPendiente()
+      .then(() => (vivo ? cargar() : null))
+      .then((fresco) => {
+        if (!vivo || !fresco) return;
+        if (fresco.registroHoy) toast('✅ Tu registro sin señal ya se envió');
+        else toast('Tu registro sin señal no se pudo subir: ya había uno de hoy.', true);
+      })
+      .catch(() => { /* se reintenta en la próxima apertura */ });
+    return () => { vivo = false; };
+  }, [pendienteHoy, cargar, toast]);
 
   const frase = useMemo(() => {
     const dayNorm = new Date().getDay() === 0 ? 7 : new Date().getDay();
@@ -378,13 +408,34 @@ export default function Hoy() {
         notas: notas.trim(),
       };
 
-      const registro = await guardarRegistro(reto.id, usuario, datos);
-      sincronizarRegistro(reto, registro); // replica a Google Sheets (no bloquea)
+      const { registro, confirmado } = await guardarRegistro(reto.id, usuario, datos);
+      sincronizarRegistro(reto, registro); // replica a Google Sheets (no bloquea; sin señal, encola)
 
       const waUrl = construirMsgWA(datos, estatus);
       const cumple = estatus === 'CUMPLE' || estatus === 'JUSTIFICADO';
       setTipo(''); setHoras(''); setMinutos(''); setCalorias(''); setNotas(''); setHonor(false);
-      const fresco = await cargar();
+
+      let fresco;
+      if (confirmado) {
+        fresco = await cargar();
+      } else {
+        // Sin señal: no esperamos a que las lecturas caigan a la caché (puede
+        // tardar ~10 s). La celebración sale con lo que ya sabemos y la
+        // pantalla se refresca por detrás.
+        const hoy = hoyMX();
+        const semanaLocal = (semana || diasDeSemana(hoy).map((fecha) => ({ fecha, estatus: 'sin registro' })))
+          .map((d) => (d.fecha === hoy ? { ...d, estatus } : d));
+        fresco = {
+          racha: calcularRacha(cumple ? [...cumplidasRef.current, hoy] : cumplidasRef.current),
+          dias: diasSemana + (cumple ? 1 : 0),
+          semana: semanaLocal,
+        };
+        setRegistroHoy({ ...registro, pendiente: true });
+        setSemana(semanaLocal);
+        setRacha(fresco.racha);
+        setDiasSemana(fresco.dias);
+        cargar().catch(() => { /* sin caché suficiente: se queda la estimación */ });
+      }
 
       // Autopost al feed: la actividad + la nota que la acompañó.
       // El Periodo Menstrual nunca se publica, por privacidad.
@@ -395,7 +446,7 @@ export default function Hoy() {
       if (cumple) {
         lanzarConfetti(colores);
         vibrate([30, 40, 60]);
-        setCelebracion({ ...fresco, estatus, tipo: datos.tipo, waUrl });
+        setCelebracion({ ...fresco, estatus, tipo: datos.tipo, waUrl, sinSenal: !confirmado });
       } else {
         setModalWA({ url: waUrl });
       }
@@ -499,6 +550,12 @@ export default function Hoy() {
             <h3>Misión <em>cumplida.</em></h3>
             <p>Hoy ya registraste tu actividad. Mañana otra vez.</p>
             <div className="done-tag">Hoy: {registroHoy.tipo}</div>
+            {registroHoy.pendiente && (
+              <p className="pendiente-nota" role="status">
+                <span className="pendiente-dot" />
+                Guardado en tu teléfono. Se envía solo cuando vuelva la señal — no hace falta registrarlo otra vez.
+              </p>
+            )}
             <a
               className="btn-wa"
               href={construirMsgWA(registroHoy, registroHoy.estatus)}

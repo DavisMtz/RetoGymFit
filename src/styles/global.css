@@ -413,6 +413,13 @@ input:disabled { opacity: 0.55; }
 .done-tag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; font-weight: 600; }
 .done-tag::before { content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
 
+/* Registro guardado sin señal, aún sin subir: mismo punto ámbar que la
+   pastilla "Sin conexión", para que se lean como la misma situación. */
+.pendiente-nota { display: flex; align-items: flex-start; gap: 8px; max-width: 320px; margin: 12px auto 16px; font-size: 12.5px; line-height: 1.5; color: var(--text-mid); text-align: left; }
+.done-state .pendiente-nota { margin: 12px auto 16px; font-size: 12.5px; }
+.pendiente-dot { flex: none; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--warn); animation: blink 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pendiente-dot { animation: none; } }
+
 /* ——— Jackpot ——— */
 .jackpot {
   position: relative; padding: 24px 22px;

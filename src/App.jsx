@@ -149,7 +149,12 @@ function Shell() {
   // Tema del reto en el body + drenar cola de sincronización a Sheets
   useEffect(() => {
     document.body.dataset.reto = reto?.id || '';
-    if (autenticado) drenarCola();
+    if (!autenticado) return undefined;
+    drenarCola();
+    // Lo registrado sin señal también se replica a la hoja en cuanto vuelve
+    // la conexión, sin esperar a la próxima apertura de la app.
+    window.addEventListener('online', drenarCola);
+    return () => window.removeEventListener('online', drenarCola);
   }, [reto, autenticado]);
 
   if (cargando) return <Boot />;

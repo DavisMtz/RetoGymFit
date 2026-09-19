@@ -9,7 +9,7 @@
 import {
   collection, doc, getDoc, getDocs, query, where, orderBy, limit,
   setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp,
-  onSnapshot, writeBatch, increment, deleteField,
+  onSnapshot, writeBatch, increment, deleteField, waitForPendingWrites,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { hoyMX, semanaISO, anioISO, mesMX, diasDeSemana, lunesDe, sumarDias } from '../lib/dates';
@@ -69,14 +69,37 @@ export function idRegistro(usuarioId, fecha) {
   return `${usuarioId}_${fecha}`;
 }
 
+/**
+ * Registro de hoy. `pendiente` = se guardó en el teléfono sin señal y
+ * Firestore todavía no lo sube (la cola vive en IndexedDB y sobrevive a
+ * cerrar la app).
+ */
 export async function obtenerRegistroHoy(retoId, usuarioId) {
   const snap = await getDoc(doc(db, 'retos', retoId, 'registros', idRegistro(usuarioId, hoyMX())));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  return snap.exists() ? { id: snap.id, ...snap.data(), pendiente: snap.metadata.hasPendingWrites } : null;
 }
+
+/** Resuelve cuando todo lo guardado sin señal ya llegó al servidor. */
+export function esperarEnvioPendiente() {
+  return waitForPendingWrites(db);
+}
+
+// Tiempo que esperamos la confirmación del servidor antes de dar el
+// registro por "guardado en el teléfono". No se decide con navigator.onLine:
+// en el WiFi del gym sin salida a internet dice `true` y mentiría.
+const ESPERA_CONFIRMACION_MS = 3000;
 
 /**
  * Guarda el registro del día. El id determinista `${usuarioId}_${fecha}`
  * + reglas de seguridad "create only" hacen imposible el doble registro.
+ *
+ * Funciona sin conexión: Firestore aplica la escritura a su caché local al
+ * instante y la sube solo cuando vuelve la señal. `setDoc` no resuelve hasta
+ * que el servidor confirma, así que no lo esperamos más de unos segundos:
+ *   - `confirmado: true`  → el servidor ya lo aceptó (flujo normal).
+ *   - `confirmado: false` → quedó en el teléfono; `envio` resuelve o rechaza
+ *     cuando el servidor por fin responde (p. ej. rechazo por duplicado).
+ * Si el servidor lo rechaza dentro del plazo, esta función lanza como antes.
  */
 export async function guardarRegistro(retoId, usuario, datos) {
   const fecha = hoyMX();
@@ -95,8 +118,15 @@ export async function guardarRegistro(retoId, usuario, datos) {
     notas: datos.notas || '',
     creadoEn: serverTimestamp(),
   };
-  await setDoc(doc(db, 'retos', retoId, 'registros', idRegistro(usuario.id, fecha)), registro);
-  return registro;
+  const envio = setDoc(doc(db, 'retos', retoId, 'registros', idRegistro(usuario.id, fecha)), registro);
+  let tope;
+  const plazo = new Promise((resolve) => { tope = setTimeout(() => resolve(false), ESPERA_CONFIRMACION_MS); });
+  try {
+    const confirmado = await Promise.race([envio.then(() => true), plazo]);
+    return { registro, confirmado, envio };
+  } finally {
+    clearTimeout(tope);
+  }
 }
 
 /** Cuenta registros de un tipo (para límites: vacaciones/año, periodo/mes) */
