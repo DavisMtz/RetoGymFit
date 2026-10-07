@@ -8,6 +8,15 @@
         "value": "var(--spring)",
         "createdAt": "2026-09-19T21:56:48.586Z",
         "reason": "Token de movimiento del proyecto: --spring es la curva base del sistema y sus gemelas en GSAP (CustomEase 'rgf-spring') la copian; cambiarla desincronizaría CSS y GSAP"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "src/styles/temporada.css"
+        ],
+        "createdAt": "2026-10-07T21:25:13.029Z",
+        "reason": "Claude: única transición de layout del archivo, el hueco de .app-shell al cambiar de temporada (evento raro); evita que el contenido salte hasta 52 px bajo el dedo en Perfil. Con transform se rompería el position:fixed de los modales que viven dentro."
       }
     ]
   }

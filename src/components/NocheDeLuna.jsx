@@ -4,13 +4,20 @@
  * Tres planos, como un escenario de teatro:
  *
  *   · FONDO (detrás de las tarjetas) — una franja de cielo sobre la cabecera
- *     (el mismo hueco que abre el papel picado), con la luna llena, una banda
- *     de niebla que le pasa por enfrente y la telaraña en la esquina. Al hacer
- *     scroll las tarjetas pasan por encima del cielo.
+ *     (el mismo hueco que abre el papel picado): estrellas que titilan, la
+ *     luna llena, nubes que la tapan al pasar, una estrella fugaz de vez en
+ *     cuando, una banda de niebla y la telaraña en la esquina, con rocío.
+ *     El cielo va en tres planos de profundidad (`data-plano`) que se mueven
+ *     a distinta velocidad con el scroll y al cambiar de pestaña.
  *   · NIEBLA BAJA — corre por el pie de la pantalla, detrás de la barra de
  *     pestañas.
- *   · FRENTE — la araña, que baja por el canal del borde izquierdo, y los
- *     murciélagos, que cruzan por encima de todo de vez en cuando.
+ *   · FRENTE — la araña, que baja por el canal del borde izquierdo; los
+ *     murciélagos, que cruzan en parvada; y la bruja, que de vez en cuando
+ *     atraviesa la luna dejando una estela de chispas.
+ *
+ * Y responde: al cerrar la celebración de un registro sale una bandada de
+ * la luna (evento 'rgf-festejo', lo manda Hoy); tocar la luna suelta unos
+ * cuantos murciélagos; tocar junto a la araña la hace subir corriendo.
  *
  * El contenedor no lleva posición ni opacidad propias A PROPÓSITO: cada plano
  * es `fixed` con su z-index, y un contenedor con opacidad crearía un contexto
@@ -21,7 +28,8 @@
  */
 import { useEffect, useRef } from 'react';
 import {
-  amanecerNocheDeLuna, nieblaNocturna, bajarArana, vuelosDeMurcielagos, retirarTemporada,
+  amanecerNocheDeLuna, nieblaNocturna, cieloVivo, profundidadNocturna, bajarArana, vuelosDeMurcielagos,
+  retirarTemporada,
 } from '../lib/anim';
 
 /*
@@ -53,6 +61,21 @@ const ESPIRAL = [20, 36, 54, 74, 96, 120].map((r, k) => {
   return d.trim();
 });
 
+/**
+ * Las estrellas de la franja de cielo: dieciséis, en posiciones fijas (un
+ * pseudoazar con semilla, para que no cambien entre una apertura y otra) y
+ * fuera del disco de la luna.
+ */
+const ESTRELLAS = Array.from({ length: 16 }, (_, i) => {
+  const azar = (n) => {
+    const x = Math.sin(i * 97.13 + n * 13.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  let x = 2 + azar(1) * 94;
+  if (x > 62 && x < 88) x = (x + 30) % 96;
+  return { x, y: 4 + azar(2) * 58, lado: azar(3) < 0.2 ? 2 : azar(3) < 0.55 ? 1.5 : 1 };
+});
+
 /** Ocho patas: cuatro por lado, dobladas en la rodilla. */
 const PATAS = [
   'M10.4 9.4 L6.4 5.6 L3.6 7.4', 'M10 11 L5.2 9.8 L2.4 12.2',
@@ -70,16 +93,50 @@ export default function NocheDeLuna({ saliendo = false, noche = false }) {
   // (efecto de abajo) y App la desmonta pase lo que pase con la animación.
   useEffect(() => {
     const raiz = raizRef.current;
-    // La noche del 31 la bandada sale de la luna, esté donde esté.
-    const luna = raiz.querySelector('.nl-luna')?.getBoundingClientRect();
-    const origen = luna ? { x: luna.left + luna.width / 2, y: luna.top + luna.height / 2 } : null;
+    const luna = raiz.querySelector('.nl-luna');
+    // El centro de la luna se pide cada vez: con el scroll se mueve.
+    const centroLuna = () => {
+      const r = luna.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const vuelos = vuelosDeMurcielagos(lienzoRef.current, { noche, origen: centroLuna, bruja: true });
+    const arana = bajarArana(aranaRef.current);
     const bajas = [
       amanecerNocheDeLuna(raiz),
       nieblaNocturna(raiz),
-      bajarArana(aranaRef.current),
-      vuelosDeMurcielagos(lienzoRef.current, { noche, origen }),
+      cieloVivo(raiz),
+      profundidadNocturna(raiz),
+      arana,
+      vuelos,
     ];
-    return () => bajas.forEach((baja) => baja && baja());
+
+    const alFestejo = () => vuelos.festejo();
+    window.addEventListener('rgf-festejo', alFestejo);
+
+    // Los toques no se roban: el listener es pasivo y solo mira dónde cayó
+    // el dedo. Sobre un botón o un enlace no hace nada.
+    let ultimoToque = 0;
+    const cerca = (e, r, margen) => e.clientX > r.left - margen && e.clientX < r.right + margen
+      && e.clientY > r.top - margen && e.clientY < r.bottom + margen;
+    const alTocar = (e) => {
+      if (e.target.closest?.('button, a, input, textarea, select, label, [role="button"]')) return;
+      if (cerca(e, luna.getBoundingClientRect(), 14)) {
+        if (performance.now() - ultimoToque > 900) {
+          ultimoToque = performance.now();
+          vuelos.estampida(centroLuna(), 7);
+        }
+        return;
+      }
+      const cuerpo = aranaRef.current?.querySelector('.nl-arana-cuerpo');
+      if (cuerpo && arana?.asustar && cerca(e, cuerpo.getBoundingClientRect(), 26)) arana.asustar();
+    };
+    window.addEventListener('pointerdown', alTocar, { passive: true });
+
+    return () => {
+      window.removeEventListener('rgf-festejo', alFestejo);
+      window.removeEventListener('pointerdown', alTocar);
+      bajas.forEach((baja) => baja && baja());
+    };
   }, [noche]);
 
   // Se apaga al salir; si vuelven a elegirla antes de que se desmonte, regresa.
@@ -93,18 +150,36 @@ export default function NocheDeLuna({ saliendo = false, noche = false }) {
     <div className="noche-luna" ref={raizRef} aria-hidden="true">
       <div className="nl-cielo" data-capa>
         <div className="nl-escenario">
-          <div className="nl-luz" />
-          <div className="nl-luna" />
-          <div className="nl-niebla nl-niebla-alta" data-niebla="80" />
+          <div className="nl-plano" data-plano="lejos">
+            {ESTRELLAS.map((e) => (
+              <span
+                key={`${e.x}-${e.y}`}
+                className="nl-estrella"
+                data-estrella
+                style={{ left: `${e.x.toFixed(1)}%`, top: `calc(env(safe-area-inset-top, 0px) + ${e.y.toFixed(1)}px)`, '--lado': `${e.lado}px` }}
+              />
+            ))}
+            <span className="nl-fugaz" />
+            <div className="nl-luz" />
+            <div className="nl-luna" />
+          </div>
+          <div className="nl-plano" data-plano="medio">
+            <div className="nl-nube nl-nube-1" data-nube />
+            <div className="nl-nube nl-nube-2" data-nube />
+            <div className="nl-niebla nl-niebla-alta" data-niebla="80" />
+          </div>
           <svg className="nl-telarana" viewBox="0 0 160 160" focusable="false">
             <g data-tela>
               {RADIOS.map((d) => <path key={d} data-radio d={d} />)}
               {ESPIRAL.map((d) => <path key={d} data-espiral d={d} />)}
+              {ESPIRAL.map((d) => <path key={`r${d}`} data-rocio d={d} pathLength="1" />)}
             </g>
           </svg>
         </div>
-        <div className="nl-niebla nl-niebla-baja nl-niebla-lejos" data-niebla="96" />
-        <div className="nl-niebla nl-niebla-baja" data-niebla="62" />
+        <div className="nl-plano" data-plano="cerca">
+          <div className="nl-niebla nl-niebla-baja nl-niebla-lejos" data-niebla="96" />
+          <div className="nl-niebla nl-niebla-baja" data-niebla="62" />
+        </div>
       </div>
 
       <div className="nl-frente" data-capa>

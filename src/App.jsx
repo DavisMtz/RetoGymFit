@@ -164,6 +164,8 @@ function Shell() {
     const direccion = destino !== -1 && origen !== -1 && destino !== origen
       ? Math.sign(destino - origen)
       : 0;
+    // Las escenas de temporada escuchan el paso para panear su cielo.
+    if (direccion) window.dispatchEvent(new CustomEvent('rgf-paso', { detail: { direccion } }));
     return entradaPagina(paginaRef.current?.firstElementChild, { direccion });
   }, [location.pathname, autenticado, esAdmin]);
 

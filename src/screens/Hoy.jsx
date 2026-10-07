@@ -656,7 +656,12 @@ export default function Hoy() {
       <Celebracion
         reto={reto}
         datos={celebracion}
-        onCerrar={() => setCelebracion(null)}
+        onCerrar={() => {
+          setCelebracion(null);
+          // La celebración tapa toda la pantalla: el festejo de la temporada
+          // (la bandada que sale de la luna) va al cerrarla, cuando se ve.
+          window.dispatchEvent(new Event('rgf-festejo'));
+        }}
       />
 
       {/* Modal WhatsApp (solo para registros que NO cumplen; el flujo de

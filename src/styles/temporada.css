@@ -59,6 +59,13 @@ html[data-temporada='brujas'] .app-shell {
   --nl-hilo: rgba(226, 222, 240, 0.42);
   --nl-tela: rgba(226, 222, 240, 0.15);
   --nl-niebla: 176, 166, 222;
+  /* La bruja, más oscura que los murciélagos: sobre el cielo casi no se ve
+     (la delata su estela) y contra la luna queda en silueta. */
+  --nl-bruja: #241d36;
+  /* Nubes de noche, un poco más claras que el cielo porque las alumbra la
+     luna: apenas se adivinan sobre el cielo y, al pasar por delante de la
+     luna, se leen como nube y no como mancha. */
+  --nl-nube: 44, 39, 62;
 }
 
 .nl-cielo,
@@ -81,6 +88,14 @@ html[data-temporada='brujas'] .app-shell {
   margin: 0 auto;
 }
 
+/* Los tres planos de profundidad: envoltorios sin dibujo propio. El scroll y
+   el paneo al cambiar de pestaña mueven ESTO, nunca la luna ni las nubes,
+   que ya tienen sus propias animaciones (ver profundidadNocturna). */
+.nl-plano {
+  position: absolute;
+  inset: 0;
+}
+
 /* La luz de la luna: su propia capa, centrada en la luna, para que la siga
    en cualquier ancho. */
 .nl-luz {
@@ -95,7 +110,9 @@ html[data-temporada='brujas'] .app-shell {
 
 /* La luna llena en su franja de cielo. Los cráteres tienen el borde suave
    (con borde duro parece un queso) y el lado de la noche lleva sombra: sin
-   ella es un círculo, con ella es una esfera. */
+   ella es un círculo, con ella es una esfera. Va OPACA, con el tono ya
+   apagado en sus colores: con opacidad, las estrellas de atrás se le
+   transparentaban. */
 .nl-luna {
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 9px);
@@ -109,8 +126,62 @@ html[data-temporada='brujas'] .app-shell {
     radial-gradient(circle at 68% 30%, rgba(120, 108, 84, 0.28) 0 3%, transparent 6.5%),
     radial-gradient(circle at 44% 76%, rgba(120, 108, 84, 0.24) 0 2.5%, transparent 5.5%),
     radial-gradient(circle at 76% 74%, transparent 52%, rgba(40, 34, 28, 0.5) 100%),
-    radial-gradient(circle at 36% 34%, #fffaf0 0%, #efe6cc 48%, #cdbf9c 100%);
-  opacity: 0.82;
+    radial-gradient(circle at 36% 34%, #e2ddd2 0%, #cdc5ae 48%, #aa9e82 100%);
+}
+
+/* Estrellas: puntos de luz que titilan (cieloVivo). Nacen visibles; con
+   menos movimiento se quedan quietas, pero ahí están. */
+.nl-estrella {
+  position: absolute;
+  width: var(--lado, 1px);
+  height: var(--lado, 1px);
+  margin: calc(var(--lado, 1px) / -2) 0 0 calc(var(--lado, 1px) / -2);
+  border-radius: 50%;
+  background: #fff8ec;
+  opacity: 0.55;
+}
+
+/* La estrella fugaz: una raya con la cabeza a la derecha. GSAP la coloca,
+   la gira y la lanza; mientras no cruza, no se ve. */
+.nl-fugaz {
+  position: absolute;
+  left: 0;
+  top: env(safe-area-inset-top, 0px);
+  width: 64px;
+  height: 1.4px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 248, 230, 0.95));
+  transform-origin: 100% 50%;
+  opacity: 0;
+}
+
+/* Nubes: varias manchas suaves en una sola caja, del color de la noche.
+   GSAP las cruza por delante de la luna. */
+.nl-nube {
+  position: absolute;
+  left: 0;
+  width: 168px;
+  height: 46px;
+  background:
+    radial-gradient(ellipse 30% 44% at 28% 60%, rgba(var(--nl-nube), 0.92), transparent 72%),
+    radial-gradient(ellipse 28% 52% at 50% 44%, rgba(var(--nl-nube), 0.96), transparent 72%),
+    radial-gradient(ellipse 30% 42% at 72% 58%, rgba(var(--nl-nube), 0.9), transparent 72%),
+    radial-gradient(ellipse 50% 30% at 50% 72%, rgba(var(--nl-nube), 0.86), transparent 75%);
+}
+
+/* Cada una con su sitio de reposo, que es donde se quedan con menos
+   movimiento: una entre la telaraña y la luna, otra rozando la luna. */
+.nl-nube-1 {
+  top: calc(env(safe-area-inset-top, 0px) + 22px);
+  left: 20%;
+}
+
+.nl-nube-2 {
+  top: calc(env(safe-area-inset-top, 0px) + 4px);
+  left: 56%;
+  width: 124px;
+  height: 34px;
+  opacity: 0.85;
 }
 
 /* Bandas de niebla: miden el doble y su dibujo se repite a la mitad
@@ -170,6 +241,16 @@ html[data-temporada='brujas'] .app-shell {
   stroke-width: 1;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
+}
+
+/* Rocío: una gota de luz que recorre un hilo de la espiral (cieloVivo). Los
+   hilos duplicados miden 1 (pathLength) y llevan un solo trazo corto; en
+   reposo ese trazo queda antes del inicio del hilo y no se ve. */
+.nl-telarana [data-rocio] {
+  stroke: rgba(255, 246, 228, 0.8);
+  stroke-width: 1.8;
+  stroke-dasharray: 0.08 1.3;
+  stroke-dashoffset: 0.08;
 }
 
 /* La araña cuelga en el canal del borde izquierdo: fuera de las tarjetas y a
@@ -465,7 +546,15 @@ html[data-tema='claro'] .noche-luna {
   --nl-hilo: rgba(42, 34, 54, 0.4);
   --nl-tela: rgba(42, 34, 54, 0.16);
   --nl-niebla: 120, 108, 160;
+  --nl-bruja: #1d1729;
+  --nl-nube: 206, 202, 220;
 }
+
+/* De día no hay estrellas, ni fugaces, ni luz de luna que atenuar. */
+html[data-tema='claro'] .nl-estrella,
+html[data-tema='claro'] .nl-fugaz,
+html[data-tema='claro'] .nl-luz,
+html[data-tema='claro'] .nl-telarana [data-rocio] { display: none; }
 
 html[data-tema='claro'][data-temporada='brujas'] body::before {
   background-image:
@@ -473,8 +562,6 @@ html[data-tema='claro'][data-temporada='brujas'] body::before {
     radial-gradient(ellipse 80% 42% at 50% 116%, rgba(91, 42, 134, 0.08), transparent 64%);
 }
 
-html[data-tema='claro'] .nl-luna { opacity: 0.9; }
-html[data-tema='claro'] .nl-luz { opacity: 0; }
 
 html[data-tema='claro'][data-temporada='muertos'] {
   --acc: #9c5a00;

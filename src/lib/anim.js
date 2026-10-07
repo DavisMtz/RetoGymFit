@@ -1369,128 +1369,484 @@ function dibujarMurcielago(ctx, s, aleteo) {
 }
 
 /**
- * Murciélagos que cruzan la pantalla.
+ * La bruja en su escoba, de perfil y mirando a la derecha, dibujada en el
+ * origen (unas 110 × 60 unidades). `t` mueve lo único que ondea con el aire:
+ * la capa, el pelo y las cerdas de la escoba.
  *
- * Cada uno es un pequeño simulador, no una ruta fija:
- *
- *   · VUELO ERRÁTICO — corrigen el rumbo a cada rato (el zigzag de un
- *     murciélago cazando), así que dos vuelos nunca son iguales.
- *   · EL GOLPE DE ALA ES ASIMÉTRICO — bajan las alas más rápido de lo que
- *     las suben, y el cuerpo sube con cada golpe. Sin eso aletean como
- *     mariposa.
- *   · PLANEAN — de vez en cuando dejan de aletear con las alas abiertas.
- *   · PROFUNDIDAD — los lejanos son chicos, lentos, más tenues y aletean
- *     más rápido; los cercanos al revés.
- *
- * `noche` (31 de octubre): sale una bandada de la luna y los vuelos se
- * vuelven frecuentes. `origen` cambia de dónde sale esa bandada.
- *
- * El color sale del CSS (`color` del lienzo), así cada tema pone el suyo.
- * Mientras no vuela ninguno, el lienzo ni se toca. Devuelve la baja.
+ * Es una silueta, así que se lee por tres rasgos y por eso van exagerados:
+ * el sombrero con la punta doblada hacia atrás, la nariz y la escoba.
  */
-export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {}) {
-  if (!canvas || reducido()) return () => {};
-  const { ctx, tam, soltar } = lienzoNitido(canvas);
-  const bandada = [];
-  let sucio = false;
+function dibujarBruja(ctx, t) {
+  const a = Math.sin(t * 0.21);
+  const b = Math.sin(t * 0.21 + 1.3);
+  // Cada pieza se rellena por separado: en un solo trazo, las que se
+  // enciman girando al revés se anulan y la silueta queda con huecos.
+  ctx.beginPath();
+  // El palo, un pelo más grueso atrás.
+  ctx.moveTo(-44, 4.6);
+  ctx.lineTo(42, -5.4);
+  ctx.lineTo(42.4, -3.4);
+  ctx.lineTo(-44, 7.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // Las cerdas: un manojo que se abre hacia atrás y aletea.
+  ctx.moveTo(-38, 3);
+  ctx.quadraticCurveTo(-52, -1 + a * 1.2, -64, -3.5 + a * 2);
+  ctx.quadraticCurveTo(-59, 2.5, -68, 5 + b * 1.6);
+  ctx.quadraticCurveTo(-58, 8, -64, 13.5 + a * 1.8);
+  ctx.quadraticCurveTo(-50, 11, -38, 9.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // La capa: sale de los hombros y ondea hacia atrás.
+  ctx.moveTo(4, -21);
+  ctx.bezierCurveTo(-8, -22 + a * 2, -22, -18 + b * 3, -34, -12 + a * 3.6);
+  ctx.quadraticCurveTo(-24, -9 + b * 2, -28, -3.5 + a * 2.6);
+  ctx.quadraticCurveTo(-14, -3, -6, 1.5);
+  ctx.lineTo(2, -8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // El cuerpo sentado: torso, regazo, la pierna y la bota hacia adelante.
+  ctx.moveTo(3, -21);
+  ctx.quadraticCurveTo(12, -20, 14, -11);
+  ctx.lineTo(16, -1.5);
+  ctx.lineTo(25, 0.5);
+  ctx.lineTo(29, 9);
+  ctx.lineTo(35.5, 9.4);
+  ctx.lineTo(35.5, 12.2);
+  ctx.lineTo(26, 12.2);
+  ctx.lineTo(20, 4.5);
+  ctx.lineTo(6, 3.5);
+  ctx.lineTo(-7, 2);
+  ctx.quadraticCurveTo(-6, -12, 3, -21);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // El brazo que va a la escoba.
+  ctx.moveTo(6.5, -18.5);
+  ctx.lineTo(24, -4.8);
+  ctx.lineTo(25.4, -2.4);
+  ctx.lineTo(8.4, -15);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // Cabeza y nariz.
+  ctx.moveTo(13.6, -25.5);
+  ctx.arc(9, -25.5, 4.6, 0, Math.PI * 2);
+  ctx.moveTo(12.6, -27.2);
+  ctx.lineTo(18.6, -24.4);
+  ctx.lineTo(12.6, -23.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // El pelo suelto.
+  ctx.moveTo(6, -27);
+  ctx.quadraticCurveTo(-2, -26 + b, -8, -20.5 + a * 1.6);
+  ctx.quadraticCurveTo(-1, -22, 5, -21.6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  // El sombrero: ala ancha y una punta que se dobla hacia atrás.
+  ctx.moveTo(-4, -29.2);
+  ctx.quadraticCurveTo(8, -32.8, 21, -30);
+  ctx.quadraticCurveTo(9, -28.2, -4, -29.2);
+  ctx.closePath();
+  ctx.moveTo(1.5, -30.4);
+  ctx.quadraticCurveTo(3.5, -40, -7, -47.5 + a * 0.8);
+  ctx.quadraticCurveTo(6.5, -42, 14.5, -30.6);
+  ctx.closePath();
+  ctx.fill();
+}
 
-  const nuevo = (op = {}) => {
-    const lado = op.lado ?? (Math.random() < 0.5 ? -1 : 1);
+/**
+ * Un destello suave pintado una vez y reutilizado en cada chispa. En oscuro
+ * lleva el corazón blanco (la luz se suma); en claro, del mismo color, porque
+ * sobre fondo claro un centro blanco desaparece y deja un aro sucio.
+ */
+function crearDestello(color, nucleo = '#ffffff') {
+  const lado = 32;
+  const lienzo = document.createElement('canvas');
+  lienzo.width = lado;
+  lienzo.height = lado;
+  const c = lienzo.getContext('2d');
+  const g = c.createRadialGradient(lado / 2, lado / 2, 0, lado / 2, lado / 2, lado / 2);
+  g.addColorStop(0, nucleo);
+  g.addColorStop(0.18, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, lado, lado);
+  return lienzo;
+}
+
+/**
+ * Lo que vuela por delante de la app: murciélagos y, de vez en cuando, la
+ * bruja cruzando la luna.
+ *
+ * MURCIÉLAGOS EN PARVADA. Cada grupo es una bandada de verdad (separación,
+ * alineación y cohesión, más un rumbo de grupo que se va curvando): nadie
+ * vuela por una ruta fija y los grupos se abren, se cierran y se reacomodan
+ * solos. Encima de eso, lo que los hace murciélagos: corrigen el rumbo a
+ * tirones, el golpe de ala baja más rápido de lo que sube y a ratos planean.
+ * Los que salen de la luna nacen lejos —chicos y tenues— y se van acercando.
+ *
+ * LA BRUJA. Cruza por la franja de cielo siguiendo una curva que pasa
+ * EXACTAMENTE por el centro de la luna: con una cuadrática, el punto de
+ * control que lo garantiza es 2·luna − (inicio + fin)/2. La recorre a
+ * velocidad constante (la curva se mide y se recorre por distancia, no por
+ * parámetro: si no, frenaría después de la luna) y deja una estela de
+ * chispas, que es lo que la delata sobre el cielo oscuro; contra la luna se
+ * ve entera, en silueta.
+ *
+ * Todo se mueve por tiempo real (deltaTime), no por cuadro: en un teléfono
+ * de 120 Hz no vuela al doble de velocidad. Mientras no vuela nada, el
+ * lienzo ni se toca.
+ *
+ * Devuelve la baja, con tres mandos colgados: `estampida(desde, cuantos)`,
+ * `bruja()` y `festejo()`. `origen` es el centro de la luna (o una función
+ * que lo da, para que siga a la luna cuando se mueve con el scroll).
+ */
+export function vuelosDeMurcielagos(canvas, { noche = false, origen = null, bruja = false } = {}) {
+  if (!canvas || reducido()) {
+    const nada = () => {};
+    nada.estampida = nada;
+    nada.bruja = nada;
+    nada.festejo = nada;
+    return nada;
+  }
+  const { ctx, tam, soltar } = lienzoNitido(canvas);
+  // Los colores se leen del CSS cada vez que algo sale a volar, no una sola
+  // vez al montar: el interruptor de tema claro/oscuro está en Perfil a una
+  // fila de la temporada, y la escena no se vuelve a montar al cambiarlo.
+  const esClaro = () => document.documentElement.dataset.tema === 'claro';
+  const colorMurcielago = () => getComputedStyle(canvas).color;
+  const colorBruja = () => getComputedStyle(canvas).getPropertyValue('--nl-bruja').trim() || '#241d36';
+  // En oscuro las chispas SUMAN luz; en claro sumar luz sobre blanco no se
+  // ve, así que ahí se pintan normales y en tonos más hondos. Las dos paletas
+  // se pintan de una vez (siete lienzos diminutos).
+  const PALETAS = {
+    oscuro: ['#ffd27a', '#ffb347', '#ff7a1a', '#d9b8ff'].map((c) => crearDestello(c, '#ffffff')),
+    claro: ['#c2410c', '#b45309', '#7c3aed'].map((c) => crearDestello(c, c)),
+  };
+
+  const murcielagos = [];
+  const bandadas = [];
+  const chispas = [];
+  let vuelo = null;
+  let ultimaBruja = -1e9;
+  let reloj = 0;
+  let sucio = false;
+  const centroLuna = () => (typeof origen === 'function' ? origen() : origen) || { x: tam.ancho * 0.75, y: 40 };
+
+  const nuevaBandada = (angulo, velocidad) => {
+    const b = { ang: angulo, vel: velocidad, curva: azarT(-0.0025, 0.0025), semilla: azarT(0, 500) };
+    bandadas.push(b);
+    return b;
+  };
+
+  const nuevo = (bandada, op) => {
     const prof = op.prof ?? Math.random();
-    const s = 12 + prof * 18;
-    bandada.push({
-      x: op.x ?? (lado < 0 ? -s * 2 : tam.ancho + s * 2),
-      y: op.y ?? tam.alto * azarT(0.05, 0.42),
-      vx: op.vx ?? -lado * (1.3 + prof * 1.9),
-      vy: op.vy ?? azarT(-0.3, 0.3),
-      s,
+    murcielagos.push({
+      x: op.x,
+      y: op.y,
+      vx: op.vx,
+      vy: op.vy,
       prof,
+      meta: op.meta ?? prof,
+      bandada,
       fase: azarT(0, Math.PI * 2),
-      ritmo: azarT(0.24, 0.32) * (1.3 - prof * 0.45),
-      deriva: azarT(0, 200),
+      ritmo: azarT(0.24, 0.32),
       planea: 0,
-      t: 0,
-      col: getComputedStyle(canvas).color,
+      col: colorMurcielago(),
     });
   };
 
-  // Un grupito que entra por el mismo lado, con un poco de desorden.
+  // Un grupo que entra por un lado de la pantalla, en fila desordenada.
   const grupo = () => {
     const lado = Math.random() < 0.5 ? -1 : 1;
-    const y = tam.alto * azarT(0.06, 0.36);
-    const n = noche ? gsap.utils.random(2, 5, 1) : gsap.utils.random(1, 3, 1);
+    const ang = (lado < 0 ? 0 : Math.PI) + azarT(-0.22, 0.22);
+    const band = nuevaBandada(ang, azarT(1.5, 2.4));
+    const y = tam.alto * azarT(0.06, 0.38);
+    const n = noche ? gsap.utils.random(3, 6, 1) : gsap.utils.random(2, 4, 1);
     for (let i = 0; i < n; i += 1) {
-      nuevo({ lado, y: y + azarT(-40, 40), x: (lado < 0 ? -30 : tam.ancho + 30) - lado * i * azarT(20, 55) });
-    }
-  };
-
-  // La bandada que sale de la luna: hacia abajo y a los lados, en abanico.
-  const estampida = () => {
-    const ox = origen?.x ?? tam.ancho * 0.75;
-    const oy = origen?.y ?? 40;
-    for (let i = 0; i < 16; i += 1) {
-      const ang = azarT(0.12, Math.PI - 0.12);
-      const vel = azarT(1.6, 3.4);
-      nuevo({
-        x: ox + azarT(-12, 12), y: oy + azarT(-6, 6), vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel * 0.55, prof: azarT(0.2, 1),
+      const atras = i * azarT(18, 40);
+      nuevo(band, {
+        x: lado < 0 ? -40 - atras : tam.ancho + 40 + atras,
+        y: y + azarT(-26, 26),
+        vx: Math.cos(ang) * band.vel,
+        vy: Math.sin(ang) * band.vel,
       });
     }
   };
 
-  // Las llamadas pendientes, para poder cancelarlas al salir. Cada una se
-  // borra al dispararse: la app puede pasar horas abierta.
-  const llamadas = new Set();
-  const programar = (seg, fn) => {
-    const llamada = gsap.delayedCall(seg, () => { llamadas.delete(llamada); fn(); });
-    llamadas.add(llamada);
-  };
-  const siguiente = () => {
-    programar(noche ? azarT(3.5, 7) : azarT(7, 14), () => { if (!document.hidden) grupo(); siguiente(); });
-  };
-  if (noche) programar(0.6, estampida);
-  programar(noche ? 2.4 : 2.5, () => { grupo(); siguiente(); });
-
-  const tick = () => {
+  // La bandada que sale de la luna: se abre en abanico y se reparte en tres
+  // grupos según hacia dónde salió cada uno.
+  const estampida = (desde = centroLuna(), cuantos = 16) => {
     if (document.hidden) return;
-    if (!bandada.length) {
+    const izq = nuevaBandada(Math.PI - azarT(0.08, 0.3), azarT(1.8, 2.6));
+    const der = nuevaBandada(azarT(0.08, 0.3), azarT(1.8, 2.6));
+    const abajo = nuevaBandada(Math.PI / 2 + azarT(-0.5, 0.5), azarT(1.5, 2.1));
+    for (let i = 0; i < cuantos; i += 1) {
+      const ang = azarT(-Math.PI, Math.PI);
+      const vel = azarT(1.4, 3.2);
+      const cos = Math.cos(ang);
+      nuevo(cos < -0.35 ? izq : cos > 0.35 ? der : abajo, {
+        x: desde.x + azarT(-8, 8),
+        y: desde.y + azarT(-8, 8),
+        vx: cos * vel,
+        vy: Math.sin(ang) * vel * 0.6,
+        prof: 0.04,
+        meta: azarT(0.35, 1),
+      });
+    }
+  };
+
+  /* ── la bruja ── */
+  const punto = (v, t) => {
+    const u = 1 - t;
+    return {
+      x: u * u * v.p0.x + 2 * u * t * v.c.x + t * t * v.p2.x,
+      y: u * u * v.p0.y + 2 * u * t * v.c.y + t * t * v.p2.y,
+    };
+  };
+  const tangente = (v, t) => ({
+    x: 2 * (1 - t) * (v.c.x - v.p0.x) + 2 * t * (v.p2.x - v.c.x),
+    y: 2 * (1 - t) * (v.c.y - v.p0.y) + 2 * t * (v.p2.y - v.c.y),
+  });
+
+  let reintento = null;
+  const lanzarBruja = () => {
+    if (!bruja || vuelo) return false;
+    // Solo cruza si la luna está a la vista: con la página bajada, la franja
+    // de cielo ya no existe y volaría sobre las tarjetas. Si no se puede
+    // ahora, se vuelve a intentar en un rato en vez de esperar la vuelta
+    // entera del calendario.
+    const luna = centroLuna();
+    if (document.hidden || luna.y < 8 || (window.scrollY || 0) > 12) {
+      if (!reintento) reintento = gsap.delayedCall(20, () => { reintento = null; lanzarBruja(); });
+      return false;
+    }
+    const dir = Math.random() < 0.65 ? 1 : -1;
+    const p0 = { x: dir > 0 ? -70 : tam.ancho + 70, y: luna.y + 16 };
+    const p2 = { x: dir > 0 ? tam.ancho + 70 : -70, y: luna.y - 22 };
+    const v = {
+      p0,
+      p2,
+      c: { x: 2 * luna.x - 0.5 * (p0.x + p2.x), y: 2 * luna.y - 0.5 * (p0.y + p2.y) },
+      dir,
+      u: 0,
+      dur: azarT(380, 440),
+      esc: tam.ancho > 600 ? 0.6 : 0.5,
+      cuadro: 0,
+      tabla: [],
+      col: colorBruja(),
+    };
+    // Se mide la curva para recorrerla por distancia.
+    let largo = 0;
+    let previo = v.p0;
+    for (let i = 1; i <= 64; i += 1) {
+      const p = punto(v, i / 64);
+      largo += Math.hypot(p.x - previo.x, p.y - previo.y);
+      v.tabla.push({ t: i / 64, l: largo });
+      previo = p;
+    }
+    v.largo = largo;
+    vuelo = v;
+    ultimaBruja = reloj;
+    return true;
+  };
+
+  const tDe = (v, u) => {
+    const meta = u * v.largo;
+    let antes = { t: 0, l: 0 };
+    for (let i = 0; i < v.tabla.length; i += 1) {
+      const m = v.tabla[i];
+      if (m.l >= meta) return antes.t + ((meta - antes.l) / Math.max(m.l - antes.l, 1e-6)) * (m.t - antes.t);
+      antes = m;
+    }
+    return 1;
+  };
+
+  /* ── el cuadro ── */
+  const R_VECINO = 64 * 64;
+  const R_ESPACIO = 22 * 22;
+
+  const moverMurcielagos = (dt) => {
+    bandadas.forEach((b) => { b.ang += (b.curva + Math.sin((reloj + b.semilla) * 0.018) * 0.004) * dt; });
+    for (let i = murcielagos.length - 1; i >= 0; i -= 1) {
+      const m = murcielagos[i];
+      let n = 0;
+      let ax = 0;
+      let ay = 0;
+      let cx = 0;
+      let cy = 0;
+      let sx = 0;
+      let sy = 0;
+      for (let j = 0; j < murcielagos.length; j += 1) {
+        const o = murcielagos[j];
+        if (o !== m && o.bandada === m.bandada) {
+          const dx = m.x - o.x;
+          const dy = m.y - o.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < R_VECINO) {
+            n += 1;
+            ax += o.vx;
+            ay += o.vy;
+            cx += o.x;
+            cy += o.y;
+            if (d2 < R_ESPACIO && d2 > 0.01) { sx += dx / d2; sy += dy / d2; }
+          }
+        }
+      }
+      const b = m.bandada;
+      let fx = (Math.cos(b.ang) * b.vel - m.vx) * 0.03;
+      let fy = (Math.sin(b.ang) * b.vel - m.vy) * 0.03;
+      if (n) {
+        fx += (ax / n - m.vx) * 0.045 + (cx / n - m.x) * 0.0011;
+        fy += (ay / n - m.vy) * 0.045 + (cy / n - m.y) * 0.0011;
+      }
+      fx += sx * 0.85 + azarT(-0.045, 0.045);
+      fy += sy * 0.85 + azarT(-0.06, 0.06);
+      m.vx += fx * dt;
+      m.vy += fy * dt;
+      const rapidez = Math.hypot(m.vx, m.vy);
+      const tope = 2.2 + m.prof * 1.6;
+      if (rapidez > tope) { m.vx *= tope / rapidez; m.vy *= tope / rapidez; }
+      m.prof += (m.meta - m.prof) * 0.015 * dt;
+      if (m.planea > 0) m.planea -= dt;
+      else if (Math.random() < 0.003 * dt) m.planea = azarT(22, 46);
+      if (m.planea <= 0) m.fase += m.ritmo * (1.3 - m.prof * 0.4) * (Math.cos(m.fase) < 0 ? 1.35 : 0.78) * dt;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      const fuera = (m.x < -160 && m.vx < 0) || (m.x > tam.ancho + 160 && m.vx > 0)
+        || (m.y < -160 && m.vy < 0) || (m.y > tam.alto + 160 && m.vy > 0);
+      if (fuera) { murcielagos.splice(i, 1); continue; }
+      const s = 9 + m.prof * 20;
+      const aleteo = m.planea > 0 ? -0.2 : Math.sin(m.fase);
+      ctx.save();
+      ctx.translate(m.x, m.y + aleteo * s * 0.08);
+      ctx.rotate(Math.max(-0.5, Math.min(0.5, m.vy * 0.2)) + m.vx * 0.02);
+      ctx.globalAlpha = 0.55 + m.prof * 0.45;
+      ctx.fillStyle = m.col;
+      dibujarMurcielago(ctx, s, aleteo);
+      ctx.restore();
+    }
+    for (let i = bandadas.length - 1; i >= 0; i -= 1) {
+      if (!murcielagos.some((m) => m.bandada === bandadas[i])) bandadas.splice(i, 1);
+    }
+  };
+
+  const moverBruja = (dt) => {
+    const v = vuelo;
+    if (!v) return;
+    v.cuadro += dt;
+    v.u = Math.min(1, v.u + dt / v.dur);
+    const t = tDe(v, v.u);
+    const p = punto(v, t);
+    const d = tangente(v, t);
+    const ang = Math.atan2(d.y * v.dir, d.x * v.dir) + Math.sin(v.cuadro * 0.05) * 0.035;
+    const y = p.y + Math.sin(v.cuadro * 0.075) * 2.4;
+    // La estela sale de las puntas de las cerdas.
+    const lx = -62 * v.dir * v.esc;
+    const ly = 5 * v.esc;
+    const cola = { x: p.x + Math.cos(ang) * lx - Math.sin(ang) * ly, y: y + Math.sin(ang) * lx + Math.cos(ang) * ly };
+    const cuantas = Math.floor(2.2 * dt + Math.random());
+    const paleta = esClaro() ? PALETAS.claro : PALETAS.oscuro;
+    for (let i = 0; i < cuantas; i += 1) {
+      chispas.push({
+        x: cola.x + azarT(-3, 3),
+        y: cola.y + azarT(-3, 3),
+        vx: -v.dir * azarT(0.1, 0.5) + azarT(-0.3, 0.3),
+        vy: azarT(-0.3, 0.45),
+        vida: 1,
+        dec: azarT(0.011, 0.026),
+        r: azarT(0.7, 1.8),
+        destello: paleta[Math.floor(Math.random() * paleta.length)],
+        titila: Math.random() < 0.4,
+      });
+    }
+    ctx.save();
+    ctx.translate(p.x, y);
+    ctx.rotate(ang);
+    ctx.scale(v.dir * v.esc, v.esc);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = v.col;
+    dibujarBruja(ctx, v.cuadro);
+    ctx.restore();
+    if (v.u >= 1) vuelo = null;
+  };
+
+  const moverChispas = (dt) => {
+    if (!chispas.length) return;
+    const claro = esClaro();
+    const escala = claro ? 4.5 : 7;
+    ctx.globalCompositeOperation = claro ? 'source-over' : 'lighter';
+    for (let i = chispas.length - 1; i >= 0; i -= 1) {
+      const c = chispas[i];
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.vy += 0.006 * dt;
+      c.vida -= c.dec * dt;
+      if (c.vida <= 0) { chispas.splice(i, 1); continue; }
+      ctx.globalAlpha = c.vida * (c.titila && Math.random() < 0.3 ? 0.35 : 1);
+      const lado = c.r * escala;
+      ctx.drawImage(c.destello, c.x - lado / 2, c.y - lado / 2, lado, lado);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  };
+
+  const tick = (tiempo, delta) => {
+    if (document.hidden) return;
+    const dt = Math.min(delta / 16.667, 3);
+    reloj += dt;
+    if (!murcielagos.length && !vuelo && !chispas.length) {
       if (sucio) { ctx.clearRect(0, 0, tam.ancho, tam.alto); sucio = false; }
       return;
     }
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
     sucio = true;
-    for (let i = bandada.length - 1; i >= 0; i -= 1) {
-      const b = bandada[i];
-      b.t += 1;
-      b.vy += Math.sin((b.t + b.deriva) * 0.05) * 0.04 + azarT(-0.025, 0.025);
-      b.vy *= 0.975;
-      if (b.planea > 0) b.planea -= 1;
-      else if (Math.random() < 0.004) b.planea = gsap.utils.random(24, 50, 1);
-      if (!b.planea) b.fase += b.ritmo * (Math.cos(b.fase) < 0 ? 1.35 : 0.78);
-      const aleteo = b.planea ? -0.2 : Math.sin(b.fase);
-      b.x += b.vx;
-      b.y += b.vy;
-      if (b.x < -80 || b.x > tam.ancho + 80 || b.y < -80 || b.y > tam.alto + 80) {
-        bandada.splice(i, 1);
-        continue;
-      }
-      ctx.save();
-      ctx.translate(b.x, b.y + aleteo * b.s * 0.08);
-      ctx.rotate(Math.max(-0.5, Math.min(0.5, b.vy * 0.22)) + b.vx * 0.02);
-      ctx.globalAlpha = 0.62 + b.prof * 0.38;
-      ctx.fillStyle = b.col;
-      dibujarMurcielago(ctx, b.s, aleteo);
-      ctx.restore();
-    }
+    moverMurcielagos(dt);
+    moverBruja(dt);
+    moverChispas(dt);
   };
   gsap.ticker.add(tick);
 
-  return () => {
+  // El calendario: grupos de murciélagos cada tanto y, de vez en cuando, la
+  // bruja. Una línea de tiempo que se repite (y se pausa en segundo plano),
+  // no temporizadores que se encadenan.
+  const programa = [];
+  programa.push(gsap.timeline({ repeat: -1, repeatRefresh: true, delay: 2.5 })
+    .call(() => { if (!document.hidden) grupo(); })
+    .to({}, { duration: () => (noche ? azarT(3.5, 7) : azarT(7, 14)) }));
+  if (noche) programa.push(gsap.delayedCall(0.6, () => estampida()));
+  if (bruja) {
+    programa.push(gsap.timeline({ repeat: -1, repeatRefresh: true, delay: 4.5 })
+      .call(lanzarBruja)
+      .to({}, { duration: () => (noche ? azarT(45, 90) : azarT(150, 260)) }));
+  }
+  const pararPrograma = ahorrarEnSegundoPlano(...programa);
+
+  const parar = () => {
     gsap.ticker.remove(tick);
-    llamadas.forEach((c) => c.kill());
+    pararPrograma();
+    if (reintento) reintento.kill();
     soltar();
-    bandada.length = 0;
+    murcielagos.length = 0;
+    chispas.length = 0;
+    vuelo = null;
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
   };
+  parar.estampida = estampida;
+  parar.bruja = lanzarBruja;
+  // Se cerró la celebración de un registro: la bandada sale de la luna y, si
+  // hace rato que no pasa, la bruja también.
+  parar.festejo = () => {
+    estampida(centroLuna(), 18);
+    if (reloj - ultimaBruja > 600) gsap.delayedCall(0.9, lanzarBruja);
+  };
+  return parar;
 }
 
 /**
@@ -1506,6 +1862,8 @@ export function amanecerNocheDeLuna(raiz) {
   if (luna) tl.from(luna, { y: 26, opacity: 0, duration: 1.6, ease: 'power3.out' }, 0);
   const nieblas = raiz.querySelectorAll('[data-niebla]');
   if (nieblas.length) tl.from(nieblas, { opacity: 0, duration: 2, ease: 'power1.out', stagger: 0.3 }, 0.2);
+  const nubes = raiz.querySelectorAll('[data-nube]');
+  if (nubes.length) tl.from(nubes, { opacity: 0, duration: 2.2, ease: 'power1.out' }, 0.6);
   const radios = raiz.querySelectorAll('[data-radio]');
   if (radios.length) tl.from(radios, { drawSVG: 0, duration: 0.7, ease: 'power2.out', stagger: 0.07 }, 0.3);
   const espiral = raiz.querySelectorAll('[data-espiral]');
@@ -1540,6 +1898,169 @@ export function nieblaNocturna(raiz) {
 }
 
 /**
+ * El cielo vivo de la franja de arriba. Cuatro cosas pequeñas que juntas
+ * hacen que la noche no se vea pintada:
+ *
+ *   · ESTRELLAS que titilan, cada una a su ritmo.
+ *   · NUBES que cruzan por delante de la luna. Sobre el cielo oscuro casi
+ *     no se ven; contra la luna sí, como de noche. Y mientras la tapan, la
+ *     luz de la luna baja: la posición se lee de GSAP (no del DOM) para no
+ *     medir el layout en cada cuadro.
+ *   · UNA ESTRELLA FUGAZ cada tanto.
+ *   · ROCÍO en la telaraña: un destello que recorre un hilo de la espiral,
+ *     como cuando le da la luz.
+ */
+export function cieloVivo(raiz) {
+  if (!raiz || reducido()) return undefined;
+  const anims = [];
+
+  raiz.querySelectorAll('[data-estrella]').forEach((estrella) => {
+    anims.push(gsap.to(estrella, {
+      opacity: () => azarT(0.12, 0.95),
+      duration: () => azarT(0.9, 2.8),
+      ease: 'sine.inOut',
+      repeat: -1,
+      repeatRefresh: true,
+      delay: azarT(0, 1.5),
+    }));
+  });
+
+  const luz = raiz.querySelector('.nl-luz');
+  if (luz) anims.push(gsap.to(luz, { scale: 1.07, duration: 5.5, ease: 'sine.inOut', yoyo: true, repeat: -1 }));
+
+  // Nubes: cada una cruza a su velocidad y arranca a media vuelta, para que
+  // al abrir la app no salgan todas desde el borde.
+  const luna = raiz.querySelector('.nl-luna');
+  const nubes = Array.from(raiz.querySelectorAll('[data-nube]'));
+  const medidas = nubes.map((n) => ({
+    izq: n.offsetLeft, ancho: n.offsetWidth, cy: n.offsetTop + n.offsetHeight / 2, alto: n.offsetHeight,
+  }));
+  nubes.forEach((nube, i) => {
+    const escena = nube.parentElement?.offsetWidth || window.innerWidth;
+    // El viaje se mide desde su `left`: así cada nube puede tener su sitio
+    // de reposo (el que se ve con menos movimiento) sin aparecer a media
+    // pantalla al empezar cada vuelta.
+    const m = medidas[i];
+    const viaje = gsap.fromTo(nube, { x: -m.izq - m.ancho - 30 }, {
+      x: escena - m.izq + 30, duration: azarT(60, 95) * (i ? 1.4 : 1), ease: 'none', repeat: -1,
+    });
+    viaje.progress(Math.random());
+    anims.push(viaje);
+  });
+  let medirNubes = null;
+  if (luz && luna && nubes.length) {
+    const lx = luna.offsetLeft + luna.offsetWidth / 2;
+    const ly = luna.offsetTop + luna.offsetHeight / 2;
+    const lr = luna.offsetWidth / 2;
+    const ponerLuz = gsap.quickSetter(luz, 'opacity');
+    let antes = -1;
+    medirNubes = () => {
+      if (document.hidden) return;
+      let tapado = 0;
+      nubes.forEach((nube, i) => {
+        const m = medidas[i];
+        const cx = m.izq + Number(gsap.getProperty(nube, 'x')) + m.ancho / 2;
+        const dx = Math.abs(cx - lx) / (m.ancho * 0.45 + lr);
+        const dy = Math.abs(m.cy - ly) / (m.alto * 0.5 + lr);
+        tapado = Math.max(tapado, Math.max(0, 1 - dx) * Math.max(0, 1 - dy * 0.7));
+      });
+      const valor = Math.round((1 - tapado * 0.7) * 100) / 100;
+      if (valor !== antes) { ponerLuz(valor); antes = valor; }
+    };
+    gsap.ticker.add(medirNubes);
+  }
+
+  const fugaz = raiz.querySelector('.nl-fugaz');
+  if (fugaz) {
+    const cruzar = () => {
+      if (document.hidden) return;
+      const ancho = fugaz.parentElement?.offsetWidth || window.innerWidth;
+      const izq = Math.random() < 0.5;
+      const grados = izq ? azarT(10, 24) : 180 - azarT(10, 24);
+      const rad = (grados * Math.PI) / 180;
+      const x0 = (izq ? azarT(0.05, 0.4) : azarT(0.6, 0.95)) * ancho;
+      const y0 = azarT(6, 24);
+      const largo = azarT(80, 130);
+      gsap.timeline()
+        .set(fugaz, { x: x0, y: y0, rotation: grados, scaleX: 0.1, opacity: 0 })
+        .to(fugaz, { opacity: 1, scaleX: 1, duration: 0.18, ease: 'power2.out' })
+        .to(fugaz, {
+          x: x0 + Math.cos(rad) * largo, y: y0 + Math.sin(rad) * largo, duration: 0.75, ease: 'power1.in',
+        }, 0)
+        .to(fugaz, { opacity: 0, scaleX: 0.3, duration: 0.32, ease: 'power2.in' }, 0.5);
+    };
+    anims.push(gsap.timeline({ repeat: -1, repeatRefresh: true, delay: azarT(6, 12) })
+      .call(cruzar)
+      .to({}, { duration: () => azarT(22, 48) }));
+  }
+
+  const rocio = Array.from(raiz.querySelectorAll('[data-rocio]'));
+  if (rocio.length) {
+    const brillar = () => {
+      if (document.hidden) return;
+      const hilo = rocio[Math.floor(Math.random() * rocio.length)];
+      gsap.fromTo(hilo, { strokeDashoffset: 0.08 }, { strokeDashoffset: -1.06, duration: azarT(1.4, 2.2), ease: 'sine.inOut' });
+    };
+    anims.push(gsap.timeline({ repeat: -1, repeatRefresh: true, delay: 3.5 })
+      .call(brillar)
+      .to({}, { duration: () => azarT(5, 10) }));
+  }
+
+  const parar = ahorrarEnSegundoPlano(...anims);
+  return () => {
+    if (medirNubes) gsap.ticker.remove(medirNubes);
+    parar();
+  };
+}
+
+/**
+ * Profundidad: el cielo no está pegado al vidrio.
+ *
+ *   · Al hacer scroll, la luna y las estrellas se van más despacio que el
+ *     contenido, y la niebla alta un poco más rápido que ellas: tres
+ *     distancias, la misma regla que el ojo usa para medir lo lejos.
+ *   · Al cambiar de pestaña (evento 'rgf-paso', lo manda App con la
+ *     dirección), el cielo se corre al lado contrario —lo lejano poco, lo
+ *     cercano más— y vuelve con un resorte, como una cámara que se paneó.
+ *
+ * Todo va en los envoltorios `[data-plano]`, nunca en la luna ni en las
+ * nubes: esas ya tienen sus propias animaciones sobre `y` y `x`.
+ */
+export function profundidadNocturna(raiz) {
+  if (!raiz || reducido()) return undefined;
+  const PLANOS = [
+    { el: raiz.querySelector('[data-plano="lejos"]'), scroll: 0.2, pan: 7 },
+    { el: raiz.querySelector('[data-plano="medio"]'), scroll: 0.34, pan: 16 },
+    { el: raiz.querySelector('[data-plano="cerca"]'), scroll: 0, pan: 26 },
+  ].filter((p) => p.el);
+  PLANOS.forEach((p) => {
+    if (p.scroll) p.mover = gsap.quickTo(p.el, 'y', { duration: 0.7, ease: 'power3.out' });
+  });
+  const alScroll = () => {
+    const s = Math.min(window.scrollY || 0, 520);
+    PLANOS.forEach((p) => { if (p.mover) p.mover(-s * p.scroll); });
+  };
+  const alPaso = (e) => {
+    const d = e.detail?.direccion;
+    if (!d || document.hidden) return;
+    PLANOS.forEach((p) => {
+      gsap.killTweensOf(p.el, 'x');
+      gsap.timeline()
+        .to(p.el, { x: -d * p.pan, duration: 0.38, ease: 'power2.out' })
+        .to(p.el, { x: 0, duration: 1.6, ease: 'elastic.out(1, 0.55)' });
+    });
+  };
+  window.addEventListener('scroll', alScroll, { passive: true });
+  window.addEventListener('rgf-paso', alPaso);
+  alScroll();
+  return () => {
+    window.removeEventListener('scroll', alScroll);
+    window.removeEventListener('rgf-paso', alPaso);
+    PLANOS.forEach((p) => gsap.killTweensOf(p.el));
+  };
+}
+
+/**
  * Una araña que baja de su telaraña por el hilo, rebota, se mece y vuelve a
  * subir a tirones.
  *
@@ -1549,7 +2070,9 @@ export function nieblaNocturna(raiz) {
  * araña de verdad: jala, se detiene, vuelve a jalar.
  *
  * Vive en el canal del borde izquierdo, fuera de las tarjetas y a la
- * izquierda del avatar de la cabecera.
+ * izquierda del avatar de la cabecera. Devuelve la baja con un mando
+ * colgado, `asustar()`: si alguien toca cerca, sube corriendo con las patas
+ * a todo lo que dan, y luego vuelve a empezar.
  */
 export function bajarArana(arana) {
   if (!arana || reducido()) return undefined;
@@ -1588,7 +2111,23 @@ export function bajarArana(arana) {
     }, '<')
     .to({}, { duration: () => azarT(7, 16) });
 
-  return ahorrarEnSegundoPlano(tl);
+  const parar = ahorrarEnSegundoPlano(tl);
+  let huida = null;
+  const baja = () => { if (huida) huida.kill(); parar(); };
+  baja.asustar = () => {
+    if (huida || hilo.caida < 24) return;
+    tl.pause();
+    huida = gsap.timeline({
+      onUpdate: pintar,
+      onComplete: () => { huida = null; tl.restart(true); },
+    })
+      .to(hilo, { caida: 0, duration: 0.6, ease: 'power3.in' })
+      .to(arana, { rotation: 0, duration: 0.3, ease: 'power2.out' }, 0)
+      .to(patas, {
+        rotation: (i) => (i % 2 ? -16 : 16), svgOrigin: '12 12', duration: 0.07, ease: 'none', yoyo: true, repeat: 7,
+      }, 0);
+  };
+  return baja;
 }
 
 /**
