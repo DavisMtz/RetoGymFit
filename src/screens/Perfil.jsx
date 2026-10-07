@@ -378,13 +378,12 @@ export default function Perfil() {
                 </span>
               </span>
             </div>
-            <div className="rank-tabs" role="radiogroup" aria-labelledby="tpp-titulo">
+            <div className="rank-tabs" role="group" aria-labelledby="tpp-titulo">
               {[['brujas', 'Brujas'], ['muertos', 'Muertos'], ['off', 'Apagada']].map(([valor, etiqueta]) => (
                 <button
                   key={valor}
                   type="button"
-                  role="radio"
-                  aria-checked={temporadaActual === valor}
+                  aria-pressed={temporadaActual === valor}
                   className={`rank-tab ${temporadaActual === valor ? 'active' : ''}`}
                   onClick={() => cambiarTemporada(valor)}
                 >

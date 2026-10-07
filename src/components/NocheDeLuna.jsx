@@ -3,12 +3,13 @@
  *
  * Tres planos, como un escenario de teatro:
  *
- *   · FONDO (detrás de las tarjetas) — la luna asomándose sobre la cabecera,
- *     una banda de niebla que le pasa por enfrente y la telaraña en la
- *     esquina. Las tarjetas la tapan al hacer scroll y se asoma entre ellas.
+ *   · FONDO (detrás de las tarjetas) — una franja de cielo sobre la cabecera
+ *     (el mismo hueco que abre el papel picado), con la luna llena, una banda
+ *     de niebla que le pasa por enfrente y la telaraña en la esquina. Al hacer
+ *     scroll las tarjetas pasan por encima del cielo.
  *   · NIEBLA BAJA — corre por el pie de la pantalla, detrás de la barra de
  *     pestañas.
- *   · FRENTE — la araña, que baja por el canal del borde derecho, y los
+ *   · FRENTE — la araña, que baja por el canal del borde izquierdo, y los
  *     murciélagos, que cruzan por encima de todo de vez en cuando.
  *
  * El contenedor no lleva posición ni opacidad propias A PROPÓSITO: cada plano
@@ -24,13 +25,13 @@ import {
 } from '../lib/anim';
 
 /*
- * La telaraña de esquina: radios que salen de la esquina superior derecha
- * (160,0) hacia abajo y a la izquierda, y vueltas de espiral entre ellos.
- * Cada tramo de espiral se comba hacia la esquina, como el hilo de verdad
- * cuando lo jala el radio.
+ * La telaraña de esquina: radios que salen de la esquina superior izquierda
+ * (0,0) hacia abajo y a la derecha, y vueltas de espiral entre ellos. Cada
+ * tramo de espiral se comba hacia la esquina, como el hilo de verdad cuando
+ * lo jala el radio.
  */
-const ESQUINA = { x: 160, y: 0 };
-const ANGULOS = [93, 108, 123, 138, 153, 168];
+const ESQUINA = { x: 0, y: 0 };
+const ANGULOS = [12, 27, 42, 57, 72, 87];
 const punto = (ang, r) => {
   const a = (ang * Math.PI) / 180;
   return { x: ESQUINA.x + Math.cos(a) * r, y: ESQUINA.y + Math.sin(a) * r };
@@ -69,11 +70,14 @@ export default function NocheDeLuna({ saliendo = false, noche = false }) {
   // (efecto de abajo) y App la desmonta pase lo que pase con la animación.
   useEffect(() => {
     const raiz = raizRef.current;
+    // La noche del 31 la bandada sale de la luna, esté donde esté.
+    const luna = raiz.querySelector('.nl-luna')?.getBoundingClientRect();
+    const origen = luna ? { x: luna.left + luna.width / 2, y: luna.top + luna.height / 2 } : null;
     const bajas = [
       amanecerNocheDeLuna(raiz),
       nieblaNocturna(raiz),
       bajarArana(aranaRef.current),
-      vuelosDeMurcielagos(lienzoRef.current, { noche }),
+      vuelosDeMurcielagos(lienzoRef.current, { noche, origen }),
     ];
     return () => bajas.forEach((baja) => baja && baja());
   }, [noche]);

@@ -1397,7 +1397,7 @@ export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {
   const nuevo = (op = {}) => {
     const lado = op.lado ?? (Math.random() < 0.5 ? -1 : 1);
     const prof = op.prof ?? Math.random();
-    const s = 10 + prof * 16;
+    const s = 12 + prof * 18;
     bandada.push({
       x: op.x ?? (lado < 0 ? -s * 2 : tam.ancho + s * 2),
       y: op.y ?? tam.alto * azarT(0.05, 0.42),
@@ -1426,8 +1426,8 @@ export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {
 
   // La bandada que sale de la luna: hacia abajo y a los lados, en abanico.
   const estampida = () => {
-    const ox = origen?.x ?? tam.ancho * 0.58;
-    const oy = origen?.y ?? 24;
+    const ox = origen?.x ?? tam.ancho * 0.75;
+    const oy = origen?.y ?? 40;
     for (let i = 0; i < 16; i += 1) {
       const ang = azarT(0.12, Math.PI - 0.12);
       const vel = azarT(1.6, 3.4);
@@ -1437,10 +1437,15 @@ export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {
     }
   };
 
-  const llamadas = [];
-  const programar = (seg, fn) => { llamadas.push(gsap.delayedCall(seg, fn)); };
+  // Las llamadas pendientes, para poder cancelarlas al salir. Cada una se
+  // borra al dispararse: la app puede pasar horas abierta.
+  const llamadas = new Set();
+  const programar = (seg, fn) => {
+    const llamada = gsap.delayedCall(seg, () => { llamadas.delete(llamada); fn(); });
+    llamadas.add(llamada);
+  };
   const siguiente = () => {
-    programar(noche ? azarT(3.5, 7) : azarT(9, 18), () => { if (!document.hidden) grupo(); siguiente(); });
+    programar(noche ? azarT(3.5, 7) : azarT(7, 14), () => { if (!document.hidden) grupo(); siguiente(); });
   };
   if (noche) programar(0.6, estampida);
   programar(noche ? 2.4 : 2.5, () => { grupo(); siguiente(); });
@@ -1471,7 +1476,7 @@ export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {
       ctx.save();
       ctx.translate(b.x, b.y + aleteo * b.s * 0.08);
       ctx.rotate(Math.max(-0.5, Math.min(0.5, b.vy * 0.22)) + b.vx * 0.02);
-      ctx.globalAlpha = 0.5 + b.prof * 0.45;
+      ctx.globalAlpha = 0.62 + b.prof * 0.38;
       ctx.fillStyle = b.col;
       dibujarMurcielago(ctx, b.s, aleteo);
       ctx.restore();
@@ -1530,7 +1535,7 @@ export function nieblaNocturna(raiz) {
   });
   const tela = raiz.querySelector('[data-tela]');
   // La telaraña respira con el aire: un grado basta.
-  if (tela) anims.push(gsap.to(tela, { rotation: -1, svgOrigin: '160 0', duration: 3.4, ease: 'sine.inOut', yoyo: true, repeat: -1 }));
+  if (tela) anims.push(gsap.to(tela, { rotation: 1, svgOrigin: '0 0', duration: 3.4, ease: 'sine.inOut', yoyo: true, repeat: -1 }));
   return ahorrarEnSegundoPlano(...anims);
 }
 
@@ -1543,8 +1548,8 @@ export function nieblaNocturna(raiz) {
  * regresa con un elástico. La subida va a tirones porque así trepa una
  * araña de verdad: jala, se detiene, vuelve a jalar.
  *
- * Vive en el canal del borde derecho, fuera de las tarjetas y lejos de los
- * botones de la cabecera.
+ * Vive en el canal del borde izquierdo, fuera de las tarjetas y a la
+ * izquierda del avatar de la cabecera.
  */
 export function bajarArana(arana) {
   if (!arana || reducido()) return undefined;
@@ -1722,7 +1727,7 @@ export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
       x: azarT(-20, tam.ancho + 20),
       y,
       prof,
-      s: 7 + prof * 9,
+      s: 8 + prof * 10,
       vy: 0.32 + prof * 0.5,
       giro: azarT(0, Math.PI * 2),
       vgiro: azarT(-0.025, 0.025),
@@ -1734,8 +1739,13 @@ export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
       col: COLORES[Math.floor(Math.random() * COLORES.length)],
     };
   };
-  // Nacen arriba, escalonados: la pantalla se va llenando, no aparece llena.
-  for (let i = 0; i < cuantos; i += 1) petalos.push(nuevo(azarT(-tam.alto * 0.9, -12)));
+  // La mitad ya viene cayendo y la otra mitad entra por arriba, escalonada:
+  // la escena se ve viva desde el primer segundo sin que todos los pétalos
+  // lleguen juntos. Aparecen con un fundido, no de golpe.
+  for (let i = 0; i < cuantos; i += 1) {
+    petalos.push(nuevo(i % 2 ? azarT(tam.alto * 0.05, tam.alto * 0.7) : azarT(-tam.alto * 0.6, -12)));
+  }
+  let entrada = 0;
 
   const alViento = () => { viento = Math.min(viento + 1.5, 2.6); };
   window.addEventListener('rgf-rafaga', alViento);
@@ -1744,6 +1754,7 @@ export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
     if (document.hidden) return;
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
     viento *= 0.984;
+    entrada = Math.min(entrada + 0.014, 1);
     petalos.forEach((p, i) => {
       p.vaiven += p.vvaiven;
       p.vuelta += p.vvuelta;
@@ -1760,7 +1771,7 @@ export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
       ctx.rotate(p.giro);
       ctx.scale(escala, escala * Math.max(0.12, Math.abs(Math.cos(p.vuelta))));
       ctx.translate(-5, -7);
-      ctx.globalAlpha = 0.6 + p.prof * 0.38;
+      ctx.globalAlpha = (0.6 + p.prof * 0.38) * entrada;
       ctx.fillStyle = p.col;
       ctx.fill(forma);
       ctx.globalAlpha *= 0.45;

@@ -229,7 +229,9 @@ function Shell() {
       {bienvenida && <PatrioBienvenida onCerrar={() => setBienvenida(false)} />}
       {escena === 'brujas' && <NocheDeLuna saliendo={temporada !== 'brujas'} noche={esNocheDeBrujas(hoyMX())} />}
       {escena === 'muertos' && <DiaDeMuertos saliendo={temporada !== 'muertos'} grande={esDiaDeMuertos(hoyMX())} />}
-      {eligeTemporada && <TemporadaBienvenida onCerrar={() => setEligeTemporada(false)} />}
+      {/* Si la temporada se apaga con el modal abierto (el admin la apagó para
+          todos), el modal se va con ella y vuelve a salir si la encienden. */}
+      {eligeTemporada && temporada && <TemporadaBienvenida onCerrar={() => setEligeTemporada(false)} />}
       <InstalarBanner />
       <CorreoBanner />
       <AvisoFotos />

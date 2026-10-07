@@ -188,13 +188,12 @@ export default function TemporadaBienvenida({ onCerrar }) {
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="tp-titulo">
           <h2 className="tp-titulo" id="tp-titulo">{titulo}</h2>
           <p>{texto}</p>
-          <div className="tp-opciones" ref={opcionesRef} role="radiogroup" aria-label="Tema de temporada">
+          <div className="tp-opciones" ref={opcionesRef} role="group" aria-label="Tema de temporada">
             {OPCIONES.map(({ id, sub }) => (
               <button
                 key={id}
                 type="button"
-                role="radio"
-                aria-checked={elegida === id}
+                aria-pressed={elegida === id}
                 className={`tp-opcion tp-${id} ${elegida === id ? 'activa' : ''}`}
                 onClick={(e) => elegir(id, e)}
               >

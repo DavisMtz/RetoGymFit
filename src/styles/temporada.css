@@ -16,13 +16,6 @@ html[data-temporada='brujas'] {
   --acc-soft: #ff7a1a22;
   --acc-glow: #ff7a1a44;
   --on-acc: #1a0b02;
-  /* Siluetas: un violeta apagado, más claro que el fondo y más oscuro que la
-     luna. Así se recortan contra las dos. */
-  --nl-murcielago: #3d3454;
-  --nl-arana: #554a70;
-  --nl-hilo: rgba(226, 222, 240, 0.42);
-  --nl-tela: rgba(226, 222, 240, 0.15);
-  --nl-niebla: 176, 166, 222;
 }
 
 /* Fondo: luz fría de luna arriba, bruma morada abajo y, en una esquina, el
@@ -37,7 +30,36 @@ html[data-temporada='brujas'] body::before {
 /* ——— Noche de brujas: la escena ———————————————————————————————————
    Ver src/components/NocheDeLuna.jsx. Cada plano es fixed con su z-index:
    el cielo DETRÁS de las tarjetas (.app-shell es z-index 1), la araña y los
-   murciélagos DELANTE. Nada de esto recibe toques. */
+   murciélagos DELANTE. Nada de esto recibe toques.
+
+   La cabecera ocupa todo el ancho del teléfono (nombre del reto a la
+   izquierda, campana y Reglas a la derecha): una luna detrás de ella dejaba
+   el texto gris por debajo de 3:1. Por eso la noche se abre su propia franja
+   de cielo encima, igual que el papel picado se abre la suya. */
+
+html[data-temporada='brujas'] .app-shell {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 72px);
+}
+
+/* El hueco se abre y se cierra deslizándose, no de un salto: al elegir otra
+   variante (o apagarla) en Perfil, el contenido se acomoda mientras la escena
+   se va. Vale también para el papel picado de muertos. */
+.app-shell { transition: padding-top 0.6s var(--smooth); }
+
+/* Los colores de la escena viven EN la escena, no en el atributo de <html>.
+   Al cambiar de variante el atributo cambia al instante, pero la escena se
+   queda 720 ms para irse con un fundido: si sus colores colgaran del
+   atributo, la telaraña, la niebla y el hilo se quedarían sin color en el
+   primer cuadro y desaparecerían de golpe en vez de apagarse. */
+.noche-luna {
+  /* Siluetas: un violeta apagado, más claro que el fondo y más oscuro que la
+     luna. Así se recortan contra las dos. */
+  --nl-murcielago: #4a3e68;
+  --nl-arana: #6a5d8a;
+  --nl-hilo: rgba(226, 222, 240, 0.42);
+  --nl-tela: rgba(226, 222, 240, 0.15);
+  --nl-niebla: 176, 166, 222;
+}
 
 .nl-cielo,
 .nl-frente {
@@ -63,24 +85,23 @@ html[data-temporada='brujas'] body::before {
    en cualquier ancho. */
 .nl-luz {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) - 132px);
-  left: calc(57% - 102px);
-  width: 300px;
-  height: 300px;
+  top: calc(env(safe-area-inset-top, 0px) + 37px - 130px);
+  left: calc(68% + 28px - 130px);
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(200, 194, 255, 0.11), rgba(200, 194, 255, 0.035) 60%, transparent);
+  background: radial-gradient(closest-side, rgba(200, 194, 255, 0.12), rgba(200, 194, 255, 0.04) 55%, transparent);
 }
 
-/* La luna se asoma por arriba, entre el nombre del reto y los botones. Va
-   tenue a propósito: el texto de la cabecera pasa por encima y tiene que
-   seguir leyéndose. Los cráteres tienen el borde suave; con borde duro
-   parece un queso. */
+/* La luna llena en su franja de cielo. Los cráteres tienen el borde suave
+   (con borde duro parece un queso) y el lado de la noche lleva sombra: sin
+   ella es un círculo, con ella es una esfera. */
 .nl-luna {
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) - 30px);
-  left: 57%;
-  width: 96px;
-  height: 96px;
+  top: calc(env(safe-area-inset-top, 0px) + 9px);
+  left: 68%;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 31% 42%, rgba(120, 108, 84, 0.42) 0 6%, transparent 11%),
@@ -89,7 +110,7 @@ html[data-temporada='brujas'] body::before {
     radial-gradient(circle at 44% 76%, rgba(120, 108, 84, 0.24) 0 2.5%, transparent 5.5%),
     radial-gradient(circle at 76% 74%, transparent 52%, rgba(40, 34, 28, 0.5) 100%),
     radial-gradient(circle at 36% 34%, #fffaf0 0%, #efe6cc 48%, #cdbf9c 100%);
-  opacity: 0.3;
+  opacity: 0.82;
 }
 
 /* Bandas de niebla: miden el doble y su dibujo se repite a la mitad
@@ -103,43 +124,43 @@ html[data-temporada='brujas'] body::before {
 }
 
 .nl-niebla-alta {
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
-  height: 64px;
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
+  height: 62px;
   background:
-    radial-gradient(ellipse 13% 42% at 8% 50%, rgba(var(--nl-niebla), 0.09), transparent 70%),
-    radial-gradient(ellipse 17% 34% at 29% 62%, rgba(var(--nl-niebla), 0.07), transparent 70%),
-    radial-gradient(ellipse 13% 42% at 58% 50%, rgba(var(--nl-niebla), 0.09), transparent 70%),
-    radial-gradient(ellipse 17% 34% at 79% 62%, rgba(var(--nl-niebla), 0.07), transparent 70%);
+    radial-gradient(ellipse 13% 42% at 8% 50%, rgba(var(--nl-niebla), 0.13), transparent 70%),
+    radial-gradient(ellipse 17% 34% at 29% 62%, rgba(var(--nl-niebla), 0.10), transparent 70%),
+    radial-gradient(ellipse 13% 42% at 58% 50%, rgba(var(--nl-niebla), 0.13), transparent 70%),
+    radial-gradient(ellipse 17% 34% at 79% 62%, rgba(var(--nl-niebla), 0.10), transparent 70%);
 }
 
 .nl-niebla-baja {
   bottom: -2vh;
   height: 34vh;
   background:
-    radial-gradient(ellipse 16% 46% at 10% 80%, rgba(var(--nl-niebla), 0.13), transparent 72%),
-    radial-gradient(ellipse 21% 54% at 33% 90%, rgba(var(--nl-niebla), 0.10), transparent 72%),
-    radial-gradient(ellipse 16% 46% at 60% 80%, rgba(var(--nl-niebla), 0.13), transparent 72%),
-    radial-gradient(ellipse 21% 54% at 83% 90%, rgba(var(--nl-niebla), 0.10), transparent 72%);
+    radial-gradient(ellipse 16% 46% at 10% 80%, rgba(var(--nl-niebla), 0.17), transparent 72%),
+    radial-gradient(ellipse 21% 54% at 33% 90%, rgba(var(--nl-niebla), 0.13), transparent 72%),
+    radial-gradient(ellipse 16% 46% at 60% 80%, rgba(var(--nl-niebla), 0.17), transparent 72%),
+    radial-gradient(ellipse 21% 54% at 83% 90%, rgba(var(--nl-niebla), 0.13), transparent 72%);
 }
 
 .nl-niebla-lejos {
   bottom: 4vh;
   height: 44vh;
   background:
-    radial-gradient(ellipse 22% 40% at 20% 70%, rgba(var(--nl-niebla), 0.07), transparent 72%),
-    radial-gradient(ellipse 15% 34% at 41% 58%, rgba(var(--nl-niebla), 0.05), transparent 72%),
-    radial-gradient(ellipse 22% 40% at 70% 70%, rgba(var(--nl-niebla), 0.07), transparent 72%),
-    radial-gradient(ellipse 15% 34% at 91% 58%, rgba(var(--nl-niebla), 0.05), transparent 72%);
+    radial-gradient(ellipse 22% 40% at 20% 70%, rgba(var(--nl-niebla), 0.09), transparent 72%),
+    radial-gradient(ellipse 15% 34% at 41% 58%, rgba(var(--nl-niebla), 0.07), transparent 72%),
+    radial-gradient(ellipse 22% 40% at 70% 70%, rgba(var(--nl-niebla), 0.09), transparent 72%),
+    radial-gradient(ellipse 15% 34% at 91% 58%, rgba(var(--nl-niebla), 0.07), transparent 72%);
 }
 
-/* Telaraña de esquina, detrás de los botones de la cabecera. Hilo de 1 px
-   pase lo que pase con la escala del dibujo. */
+/* Telaraña en la esquina izquierda del cielo. Hilo de 1 px pase lo que pase
+   con la escala del dibujo. */
 .nl-telarana {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 132px;
-  height: 132px;
+  left: 0;
+  width: 112px;
+  height: 112px;
   overflow: visible;
 }
 
@@ -151,14 +172,14 @@ html[data-temporada='brujas'] body::before {
   vector-effect: non-scaling-stroke;
 }
 
-/* La araña cuelga en el canal del borde derecho: fuera de las tarjetas y a
-   la derecha del botón de Reglas. Hilo y cuerpo leen la MISMA variable
-   (--caida), así nunca se separan. GSAP la mueve; aquí no hay transiciones. */
+/* La araña cuelga en el canal del borde izquierdo: fuera de las tarjetas y a
+   la izquierda del avatar. Hilo y cuerpo leen la MISMA variable (--caida),
+   así nunca se separan. GSAP la mueve; aquí no hay transiciones. */
 .nl-arana {
   --caida: 0px;
   position: absolute;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
-  right: 1px;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 1px;
   width: 18px;
   height: 18px;
 }
@@ -436,6 +457,9 @@ html[data-tema='claro'][data-temporada='brujas'] {
   --acc-soft: #b84a0016;
   --acc-glow: #b84a0033;
   --on-acc: #ffffff;
+}
+
+html[data-tema='claro'] .noche-luna {
   --nl-murcielago: #2a2236;
   --nl-arana: #2a2236;
   --nl-hilo: rgba(42, 34, 54, 0.4);
@@ -449,7 +473,7 @@ html[data-tema='claro'][data-temporada='brujas'] body::before {
     radial-gradient(ellipse 80% 42% at 50% 116%, rgba(91, 42, 134, 0.08), transparent 64%);
 }
 
-html[data-tema='claro'] .nl-luna { opacity: 0.55; }
+html[data-tema='claro'] .nl-luna { opacity: 0.9; }
 html[data-tema='claro'] .nl-luz { opacity: 0; }
 
 html[data-tema='claro'][data-temporada='muertos'] {
