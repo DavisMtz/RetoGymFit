@@ -87,15 +87,16 @@ html[data-patrio='on'] body::before {
 
 .pp-banderin {
   /* --pp-giro es la inclinación de la cuerda en este punto (fija, la pone el
-     componente); las otras dos las mueve GSAP y se SUMAN aquí, porque dos
+     componente); las otras tres las mueve GSAP y se SUMAN aquí, porque dos
      tweens sobre rotate se pisarían. */
   --pp-vaiven: 0deg;
   --pp-rafaga: 0deg;
+  --pp-toque: 0deg;   /* el empujón de un dedo o del viento al cambiar de pestaña */
   --pp-canto: 1;
   display: block;
   width: 100%;
   height: 76px;
-  transform: rotate(calc(var(--pp-giro, 0deg) + var(--pp-vaiven) + var(--pp-rafaga))) scaleX(var(--pp-canto));
+  transform: rotate(calc(var(--pp-giro, 0deg) + var(--pp-vaiven) + var(--pp-rafaga) + var(--pp-toque))) scaleX(var(--pp-canto));
   transform-origin: 50% 0;   /* cuelga del nudo, se mece desde arriba */
   will-change: transform;
   opacity: 0.92;
@@ -234,6 +235,7 @@ html[data-tema='claro'] .pp-cuerda path {
   .pp-banderin {
     --pp-vaiven: 0deg !important;
     --pp-rafaga: 0deg !important;
+    --pp-toque: 0deg !important;
     --pp-canto: 1 !important;
   }
   .patrio-cohetes { display: none; }

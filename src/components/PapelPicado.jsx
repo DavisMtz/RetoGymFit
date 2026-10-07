@@ -113,11 +113,24 @@ const VARIANTES = [
 ];
 
 /**
+ * Orla de picado fino: una fila de puntitos a lo largo del borde de arriba y
+ * de los lados. Es el marco que lleva casi todo el papel picado de ofrenda y
+ * lo que, de cerca, hace que se vea picado a mano y no impreso.
+ */
+function orla() {
+  let d = '';
+  for (let x = 6; x <= A - 6; x += 8) d += circulo(x, 4.2, 1.5);
+  for (let y = 12; y <= 70; y += 8) d += circulo(4.2, y, 1.5) + circulo(A - 4.2, y, 1.5);
+  return d;
+}
+
+/**
  * Figuras de ofrenda para el Día de Muertos. En el papel picado de verdad lo
  * que queda de papel tiene que seguir unido a la hoja —si no, se cae al
  * picarla—, así que la calavera cuelga de puentes finos dentro de su ventana
  * y las alas de la mariposa salen del cuerpo. Con `evenodd` cada subtrazado
  * anidado alterna: ventana (hueco) → calavera (papel) → ojos (hueco).
+ * Todas llevan la orla.
  */
 export const FIGURAS_MUERTOS = [
   // Calavera dentro de su ventana, colgada de cuatro puentes
@@ -162,7 +175,24 @@ export const FIGURAS_MUERTOS = [
     + circulo(20, 51.5, 1.4) + circulo(A - 20, 51.5, 1.4)
     + circulo(26.4, 22, 1.5) + circulo(A - 26.4, 22, 1.5)
     + circulo(A / 2, 70, 2.6),
-];
+  // El arco de la ofrenda: el arco de flor que enmarca el altar. La banda es
+  // hueco y sus flores son islas de papel; adentro, los escalones del altar
+  // con su vela.
+  () => {
+    let d = `M0,0 H${A} ${bordeZigzag(5)} Z `
+      + 'M10,68 V42 A20,20 0 0 1 50,42 V68 H43 V42 A13,13 0 0 0 17,42 V68 Z ';
+    for (let i = 0; i <= 8; i += 1) {
+      const a = Math.PI + (Math.PI / 8) * i;
+      d += circulo(30 + Math.cos(a) * 16.5, 42 + Math.sin(a) * 16.5, 2.3);
+    }
+    return d
+      + circulo(13.5, 52, 2.3) + circulo(A - 13.5, 52, 2.3)
+      + circulo(13.5, 61, 2.3) + circulo(A - 13.5, 61, 2.3)
+      + 'M20,66 H40 V62.5 H20 Z M23,60.5 H37 V57 H23 Z M26,55 H34 V51.5 H26 Z '
+      + 'M29,51.5 V46 H31 V51.5 Z M30,41.5 C31.6,43.4 31.6,44.8 30,45.4 C28.4,44.8 28.4,43.4 30,41.5 Z '
+      + circulo(A / 2, 12, 2.4);
+  },
+].map((figura) => () => figura() + orla());
 
 /** Cuántos banderines caben. Se mide de verdad, no se esconden con CSS: la
  *  comba depende de CUÁNTOS hay, y unos ocultos la dejarían mal calculada. */

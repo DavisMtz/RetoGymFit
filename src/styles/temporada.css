@@ -331,12 +331,11 @@ html[data-temporada='muertos'] {
   --on-acc: #1f1100;
 }
 
-/* Fondo: morado arriba —el color del luto en la ofrenda— y abajo la luz
-   tibia de las velas. */
+/* Fondo: morado arriba —el color del luto en la ofrenda—. La luz tibia de
+   abajo ya no va aquí: es la veladora (.dm-veladora), que titila. */
 html[data-temporada='muertos'] body::before {
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(123, 47, 191, 0.15), transparent 62%),
-    radial-gradient(ellipse 70% 42% at 50% 116%, rgba(255, 150, 30, 0.11), transparent 62%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(123, 47, 191, 0.15), transparent 62%);
 }
 
 /* El papel picado necesita el mismo hueco que en el mes patrio (las reglas
@@ -352,15 +351,29 @@ html[data-temporada='muertos'] .app-shell {
   }
 }
 
-/* Los pétalos caen por delante de las tarjetas y por detrás de la barra de
-   pestañas, los modales y la guirnalda. */
+/* Pétalos y monarcas van por delante de las tarjetas y también de la
+   guirnalda (z-index 3): las mariposas se posan EN los banderines. Por
+   detrás de la barra de pestañas y de los modales. */
 .dm-petalos {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 2;
+  z-index: 4;
   pointer-events: none;
+}
+
+/* La luz de las veladoras: sale del pie de la pantalla, detrás de las
+   tarjetas. GSAP la hace titilar (encenderVeladora). */
+.dm-veladora {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44vh;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 72% 66% at 50% 112%, rgba(255, 150, 30, 0.17), rgba(255, 120, 20, 0.05) 55%, transparent 76%);
 }
 
 /* El bote se viste de ofrenda: morado con flor de cempasúchil. */
@@ -572,8 +585,11 @@ html[data-tema='claro'][data-temporada='muertos'] {
 
 html[data-tema='claro'][data-temporada='muertos'] body::before {
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(123, 47, 191, 0.10), transparent 62%),
-    radial-gradient(ellipse 70% 42% at 50% 116%, rgba(255, 150, 30, 0.10), transparent 62%);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(123, 47, 191, 0.10), transparent 62%);
+}
+
+html[data-tema='claro'] .dm-veladora {
+  background: radial-gradient(ellipse 72% 66% at 50% 112%, rgba(255, 140, 20, 0.13), rgba(255, 120, 20, 0.04) 55%, transparent 76%);
 }
 
 /* ——— Accesibilidad ———————————————————————————————————————————————

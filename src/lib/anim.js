@@ -2235,46 +2235,135 @@ export function trazarEmblemasTemporada(raiz) {
 const PETALO_CEMPASUCHIL = 'M5 14 C3 11 0 7 0.6 3.2 C1.2 1.2 2.4 0.4 3.2 1.4 C3.8 0.2 4.6 -0.2 5 1 '
   + 'C5.4 -0.2 6.2 0.2 6.8 1.4 C7.6 0.4 8.8 1.2 9.4 3.2 C10 7 7 11 5 14 Z';
 
-/**
- * Pétalos de cempasúchil que caen: el camino de flor que se le pone a las
- * almas para que encuentren la ofrenda.
- *
- *   · DAN VUELTAS AL CAER — se aplanan y se abren (escala vertical con el
- *     coseno de su giro), como un pétalo de verdad que se ve de canto. Es lo
- *     que separa un pétalo de un confeti.
- *   · SE MECEN — cada uno con su vaivén y su ritmo.
- *   · EL VIENTO ES EL MISMO DE LA GUIRNALDA — cuando una ráfaga sacude el
- *     papel picado (evento 'rgf-rafaga'), los pétalos se van de lado con
- *     ella. La escena se mueve como una sola cosa, no como dos efectos.
- *
- * `abundancia` multiplica cuántos caen a la vez (1 y 2 de noviembre, más).
- * Devuelve la baja.
+/*
+ * La mariposa monarca, vista de frente, en unidades (envergadura 1, el
+ * cuerpo en x = 0). Se arma solo el lado derecho y se refleja. Lo que la hace
+ * monarca y no «una mariposa naranja»: el ala de adelante alargada con la
+ * punta redonda, el borde y las venas negras, y los puntitos blancos del
+ * borde. Se construye una sola vez.
  */
-export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
-  if (!canvas || reducido() || typeof Path2D === 'undefined') return () => {};
+let piezasMonarca = null;
+function monarca() {
+  if (piezasMonarca) return piezasMonarca;
+  const puntos = new Path2D();
+  [[0.46, -0.33], [0.42, -0.27], [0.47, -0.24], [0.36, 0.12], [0.33, 0.22], [0.25, 0.3]].forEach(([x, y]) => {
+    puntos.moveTo(x + 0.014, y);
+    puntos.arc(x, y, 0.014, 0, Math.PI * 2);
+  });
+  const cuerpo = new Path2D();
+  cuerpo.ellipse(0, 0.04, 0.026, 0.2, 0, 0, Math.PI * 2);
+  cuerpo.moveTo(0.032, -0.19);
+  cuerpo.arc(0, -0.19, 0.032, 0, Math.PI * 2);
+  piezasMonarca = {
+    delantera: new Path2D('M0.03,-0.08 C0.12,-0.3 0.36,-0.4 0.5,-0.36 C0.53,-0.3 0.48,-0.12 0.4,-0.03 C0.28,0.02 0.12,0.02 0.03,0 Z'),
+    trasera: new Path2D('M0.03,0 C0.16,0 0.34,0.04 0.37,0.15 C0.38,0.26 0.26,0.34 0.15,0.33 C0.08,0.3 0.04,0.16 0.03,0.06 Z'),
+    venas: new Path2D('M0.04,-0.05 L0.45,-0.32 M0.06,-0.03 L0.42,-0.14 M0.08,-0.01 L0.34,-0.02 '
+      + 'M0.05,0.03 L0.33,0.12 M0.05,0.05 L0.26,0.27 M0.04,0.07 L0.14,0.3'),
+    puntos,
+    cuerpo,
+    antenas: new Path2D('M-0.01,-0.21 Q-0.04,-0.3 -0.08,-0.35 M0.01,-0.21 Q0.04,-0.3 0.08,-0.35'),
+  };
+  return piezasMonarca;
+}
+
+/**
+ * Dibuja una monarca en el origen. `s` es la envergadura en px y `abre`
+ * cuánto se ven las alas (1 abiertas de frente, ~0.15 casi juntas): el
+ * aleteo de una mariposa vista de frente es justo eso, las alas que se
+ * angostan y se abren.
+ */
+function dibujarMonarca(ctx, s, abre) {
+  const m = monarca();
+  [-1, 1].forEach((lado) => {
+    ctx.save();
+    ctx.scale(lado * s * abre, s);
+    ctx.fillStyle = '#e46f17';
+    ctx.fill(m.trasera);
+    ctx.fillStyle = '#f7931e';
+    ctx.fill(m.delantera);
+    ctx.strokeStyle = '#1c120c';
+    ctx.lineWidth = 0.036;
+    ctx.stroke(m.delantera);
+    ctx.stroke(m.trasera);
+    ctx.lineWidth = 0.016;
+    ctx.stroke(m.venas);
+    ctx.fillStyle = '#fff4e2';
+    ctx.fill(m.puntos);
+    ctx.restore();
+  });
+  ctx.save();
+  ctx.scale(s, s);
+  ctx.fillStyle = '#1c120c';
+  ctx.fill(m.cuerpo);
+  ctx.strokeStyle = '#1c120c';
+  ctx.lineWidth = 0.014;
+  ctx.stroke(m.antenas);
+  ctx.restore();
+}
+
+/**
+ * Lo que cae y lo que vuela sobre la ofrenda: pétalos de cempasúchil y
+ * mariposas monarca.
+ *
+ * PÉTALOS — el camino de flor que se le pone a las almas.
+ *   · Dan vueltas al caer: se aplanan y se abren (escala vertical con el
+ *     coseno de su giro), como un pétalo de verdad que se ve de canto.
+ *   · De vez en cuando cae una flor entera, que pesa más y no se voltea.
+ *   · Tienen profundidad: al hacer scroll, los cercanos se van con la
+ *     página más que los lejanos.
+ *   · El viento es UNO: la ráfaga que sacude el papel picado (evento
+ *     'rgf-rafaga') y el aire de cambiar de pestaña (`soplar`) los empujan
+ *     hacia el mismo lado al que se mecen los banderines.
+ *
+ * MONARCAS — llegan a Michoacán justo para muertos; se dice que son las
+ * almas que vuelven.
+ *   · Aletean de frente (las alas se angostan y se abren) y cada golpe las
+ *     levanta un poco; a ratos planean con las alas abiertas.
+ *   · Algunas buscan dónde posarse —el nudo de un banderín (`posaderos`)—,
+ *     llegan frenando, se quedan un rato abriendo y cerrando las alas
+ *     despacio y se van solas, o cuando alguien toca su banderín
+ *     (`espantar`).
+ *
+ * Todo por tiempo real (deltaTime). Devuelve la baja con mandos colgados:
+ * `festejo()`, `soplar(direccion)` y `espantar(punto)`.
+ */
+export function petalosDeCempasuchil(canvas, { abundancia = 1, monarcas = false, posaderos = null } = {}) {
+  if (!canvas || reducido() || typeof Path2D === 'undefined') {
+    const nada = () => {};
+    nada.festejo = nada;
+    nada.soplar = nada;
+    nada.espantar = nada;
+    return nada;
+  }
   const { ctx, tam, soltar } = lienzoNitido(canvas);
   const forma = new Path2D(PETALO_CEMPASUCHIL);
   const nervio = new Path2D('M5 12.6 L5 3.6');
   const COLORES = ['#ffae1a', '#ff8a00', '#ffc23d', '#f97316', '#ff9f1c'];
   const cuantos = Math.round(10 * abundancia);
   const petalos = [];
+  const mariposas = [];
   let viento = 0;
+  let reloj = 0;
+  let entrada = 0;
 
-  const nuevo = (y) => {
+  const nuevo = (y, extra = false) => {
     const prof = Math.random();
+    const flor = Math.random() < 0.09;
     return {
       x: azarT(-20, tam.ancho + 20),
       y,
       prof,
-      s: 8 + prof * 10,
-      vy: 0.32 + prof * 0.5,
+      flor,
+      extra,
+      s: flor ? 12 + prof * 8 : 8 + prof * 10,
+      vy: (flor ? 0.55 : 0.32) + prof * 0.5,
       giro: azarT(0, Math.PI * 2),
       vgiro: azarT(-0.025, 0.025),
       vuelta: azarT(0, Math.PI * 2),
-      vvuelta: azarT(0.018, 0.05),
+      vvuelta: flor ? azarT(0.01, 0.025) : azarT(0.018, 0.05),
       vaiven: azarT(0, Math.PI * 2),
       vvaiven: azarT(0.008, 0.02),
-      ampl: azarT(0.25, 0.8),
+      ampl: flor ? azarT(0.15, 0.4) : azarT(0.25, 0.8),
       col: COLORES[Math.floor(Math.random() * COLORES.length)],
     };
   };
@@ -2284,49 +2373,289 @@ export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
   for (let i = 0; i < cuantos; i += 1) {
     petalos.push(nuevo(i % 2 ? azarT(tam.alto * 0.05, tam.alto * 0.7) : azarT(-tam.alto * 0.6, -12)));
   }
-  let entrada = 0;
 
-  const alViento = () => { viento = Math.min(viento + 1.5, 2.6); };
-  window.addEventListener('rgf-rafaga', alViento);
+  const dibujarPetalo = (p) => {
+    const escala = p.s / 14;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.giro);
+    ctx.scale(escala, escala * Math.max(0.12, Math.abs(Math.cos(p.vuelta))));
+    ctx.translate(-5, -7);
+    ctx.globalAlpha = (0.6 + p.prof * 0.38) * entrada;
+    ctx.fillStyle = p.col;
+    ctx.fill(forma);
+    ctx.globalAlpha *= 0.45;
+    ctx.strokeStyle = '#a64b00';
+    ctx.lineWidth = 0.7;
+    ctx.stroke(nervio);
+    ctx.restore();
+  };
 
-  const tick = () => {
-    if (document.hidden) return;
-    ctx.clearRect(0, 0, tam.ancho, tam.alto);
-    viento *= 0.984;
-    entrada = Math.min(entrada + 0.014, 1);
-    petalos.forEach((p, i) => {
-      p.vaiven += p.vvaiven;
-      p.vuelta += p.vvuelta;
-      p.giro += p.vgiro + viento * 0.006;
-      p.x += Math.sin(p.vaiven) * p.ampl + viento * (0.5 + p.prof);
-      p.y += p.vy * (0.75 + Math.abs(Math.cos(p.vuelta)) * 0.5);
-      if (p.y > tam.alto + 24 || p.x > tam.ancho + 40 || p.x < -40) {
-        petalos[i] = nuevo(azarT(-60, -14));
-        return;
+  // Una flor entera: dos coronas de pétalos y el botón del centro.
+  const dibujarFlor = (p) => {
+    const escala = p.s / 30;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.giro);
+    ctx.scale(escala, escala * (0.62 + 0.38 * Math.abs(Math.cos(p.vuelta))));
+    ctx.globalAlpha = (0.7 + p.prof * 0.3) * entrada;
+    [[9, 1, '#f26b0f'], [7, 0.7, '#ffa41c']].forEach(([n, e, color]) => {
+      ctx.fillStyle = color;
+      for (let k = 0; k < n; k += 1) {
+        ctx.save();
+        ctx.rotate((Math.PI * 2 * k) / n + e);
+        ctx.scale(e, e);
+        ctx.translate(-5, -15);
+        ctx.fill(forma);
+        ctx.restore();
       }
-      const escala = p.s / 14;
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.giro);
-      ctx.scale(escala, escala * Math.max(0.12, Math.abs(Math.cos(p.vuelta))));
-      ctx.translate(-5, -7);
-      ctx.globalAlpha = (0.6 + p.prof * 0.38) * entrada;
-      ctx.fillStyle = p.col;
-      ctx.fill(forma);
-      ctx.globalAlpha *= 0.45;
-      ctx.strokeStyle = '#a64b00';
-      ctx.lineWidth = 0.7;
-      ctx.stroke(nervio);
-      ctx.restore();
     });
+    ctx.fillStyle = '#b8410a';
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  /* ── monarcas ── */
+  const ocupado = (i) => mariposas.some((m) => m.meta && m.meta.i === i);
+  const buscarPosadero = (m) => {
+    if (!posaderos || mariposas.filter((o) => o.meta).length >= 2) return;
+    const libres = posaderos().map((p, i) => ({ ...p, i })).filter((p) => !ocupado(p.i) && p.y > 0);
+    if (libres.length) m.meta = libres[Math.floor(Math.random() * libres.length)];
+  };
+
+  const nuevaMariposa = (op = {}) => {
+    const lado = op.lado ?? (Math.random() < 0.5 ? -1 : 1);
+    const prof = op.prof ?? azarT(0.45, 1);
+    const s = 18 + prof * 14;
+    const m = {
+      x: op.x ?? (lado < 0 ? -s : tam.ancho + s),
+      y: op.y ?? tam.alto * azarT(0.12, 0.6),
+      vx: op.vx ?? -lado * azarT(0.9, 1.4),
+      vy: op.vy ?? azarT(-0.3, 0.3),
+      rumbo: op.rumbo ?? (lado < 0 ? 0 : Math.PI) + azarT(-0.3, 0.3),
+      s,
+      prof,
+      fase: azarT(0, Math.PI * 2),
+      ritmo: azarT(0.5, 0.68),
+      planea: 0,
+      posada: false,
+      meta: null,
+      hasta: 0,
+      semilla: azarT(0, 100),
+    };
+    if (op.posarse ?? Math.random() < 0.45) buscarPosadero(m);
+    mariposas.push(m);
+  };
+
+  const despegar = (m) => {
+    m.posada = false;
+    m.meta = null;
+    m.vy = -azarT(0.9, 1.5);
+    m.vx = (Math.random() < 0.5 ? -1 : 1) * azarT(0.6, 1.2);
+    m.rumbo = Math.atan2(m.vy, m.vx);
+    m.planea = 0;
+  };
+
+  const moverMariposas = (dt) => {
+    for (let i = mariposas.length - 1; i >= 0; i -= 1) {
+      const m = mariposas[i];
+      let abre;
+      let inclina = 0;
+      if (m.posada) {
+        // Posada: abre y cierra las alas despacio, como respirando.
+        abre = 0.35 + 0.65 * Math.abs(Math.sin(reloj * 0.03 + m.semilla));
+        if (reloj > m.hasta) despegar(m);
+      } else {
+        m.rumbo += (Math.sin((reloj + m.semilla) * 0.04) * 0.02 + azarT(-0.04, 0.04)) * dt;
+        let ox = Math.cos(m.rumbo) * 1.2;
+        let oy = Math.sin(m.rumbo) * 0.8;
+        if (m.meta) {
+          const dx = m.meta.x - m.x;
+          const dy = (m.meta.y - m.s * 0.12) - m.y;
+          const d = Math.hypot(dx, dy);
+          if (d < 4) {
+            m.posada = true;
+            m.x = m.meta.x;
+            m.y = m.meta.y - m.s * 0.12;
+            m.vx = 0;
+            m.vy = 0;
+            m.hasta = reloj + azarT(300, 620);
+          } else {
+            // Llega frenando: el último tramo lo hace despacio.
+            const v = Math.min(1.3, d * 0.035 + 0.3);
+            ox = (dx / d) * v;
+            oy = (dy / d) * v;
+          }
+        }
+        if (!m.posada) {
+          m.vx += (ox - m.vx) * 0.05 * dt;
+          m.vy += (oy - m.vy) * 0.05 * dt;
+          if (m.planea > 0) m.planea -= dt;
+          else if (!m.meta && Math.random() < 0.004 * dt) m.planea = azarT(18, 36);
+          if (m.planea <= 0) m.fase += m.ritmo * dt;
+          abre = m.planea > 0 ? 0.92 : 0.16 + 0.84 * (0.5 + 0.5 * Math.cos(m.fase));
+          // Cada golpe de ala la levanta un poco.
+          const golpe = m.planea > 0 ? 0.03 : -Math.sin(m.fase) * 1.8;
+          m.x += m.vx * dt;
+          m.y += (m.vy + golpe * 0.25) * dt;
+          inclina = Math.max(-0.4, Math.min(0.4, m.vx * 0.18));
+          const lejos = 80;
+          if (!m.meta && (m.x < -lejos || m.x > tam.ancho + lejos || m.y < -lejos || m.y > tam.alto + lejos)) {
+            mariposas.splice(i, 1);
+            continue;
+          }
+        } else {
+          abre = 1;
+        }
+      }
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.rotate(inclina);
+      ctx.globalAlpha = (0.85 + m.prof * 0.15) * entrada;
+      dibujarMonarca(ctx, m.s, abre);
+      ctx.restore();
+    }
+  };
+
+  /* ── el viento ── */
+  // La ráfaga del papel picado mece los banderines con giro positivo (la
+  // punta se va a la izquierda): el viento sopla hacia la izquierda.
+  const alRafaga = () => { viento = Math.max(viento - 1.5, -2.6); };
+  window.addEventListener('rgf-rafaga', alRafaga);
+
+  let ultimoScroll = window.scrollY || 0;
+  const alScroll = () => {
+    const y = window.scrollY || 0;
+    const d = Math.max(-60, Math.min(60, y - ultimoScroll));
+    ultimoScroll = y;
+    petalos.forEach((p) => { p.y -= d * (0.15 + p.prof * 0.5); });
+    mariposas.forEach((m) => { if (!m.posada) m.y -= d * (0.2 + m.prof * 0.4); });
+  };
+  window.addEventListener('scroll', alScroll, { passive: true });
+
+  const tick = (tiempo, delta) => {
+    if (document.hidden) return;
+    const dt = Math.min(delta / 16.667, 3);
+    reloj += dt;
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+    viento *= 0.984 ** dt;
+    entrada = Math.min(entrada + 0.014 * dt, 1);
+    for (let i = petalos.length - 1; i >= 0; i -= 1) {
+      const p = petalos[i];
+      p.vaiven += p.vvaiven * dt;
+      p.vuelta += p.vvuelta * dt;
+      p.giro += (p.vgiro + viento * 0.006) * dt;
+      p.x += (Math.sin(p.vaiven) * p.ampl + viento * (0.5 + p.prof)) * dt;
+      p.y += p.vy * (0.75 + Math.abs(Math.cos(p.vuelta)) * 0.5) * dt;
+      if (p.y > tam.alto + 30 || p.x > tam.ancho + 40 || p.x < -40) {
+        if (p.extra) petalos.splice(i, 1);
+        else petalos[i] = nuevo(azarT(-60, -14));
+      } else if (p.flor) {
+        dibujarFlor(p);
+      } else {
+        dibujarPetalo(p);
+      }
+    }
+    if (mariposas.length) moverMariposas(dt);
   };
   gsap.ticker.add(tick);
 
-  return () => {
+  // Las monarcas llegan de una en una; el 1 y el 2 de noviembre, más seguido.
+  const programa = [];
+  if (monarcas) {
+    programa.push(gsap.timeline({ repeat: -1, repeatRefresh: true, delay: 2.2 })
+      .call(() => { if (!document.hidden && mariposas.length < 4) nuevaMariposa(); })
+      .to({}, { duration: () => (abundancia > 1.5 ? azarT(5, 9) : azarT(9, 16)) }));
+  }
+  const pararPrograma = ahorrarEnSegundoPlano(...programa);
+
+  const parar = () => {
     gsap.ticker.remove(tick);
-    window.removeEventListener('rgf-rafaga', alViento);
+    pararPrograma();
+    window.removeEventListener('rgf-rafaga', alRafaga);
+    window.removeEventListener('scroll', alScroll);
     soltar();
     petalos.length = 0;
+    mariposas.length = 0;
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
   };
+  // Se cerró la celebración de un registro: llueve flor y salen monarcas
+  // desde abajo, que suben abriéndose en abanico.
+  parar.festejo = () => {
+    if (document.hidden) return;
+    for (let i = 0; i < 28; i += 1) {
+      const p = nuevo(azarT(-tam.alto * 0.3, -10), true);
+      p.vy *= 1.3;
+      petalos.push(p);
+    }
+    if (!monarcas) return;
+    for (let i = 0; i < 5; i += 1) {
+      const vx = azarT(-1.4, 1.4);
+      const vy = -azarT(1.1, 1.9);
+      nuevaMariposa({
+        x: tam.ancho / 2 + azarT(-70, 70),
+        y: tam.alto + 20,
+        vx,
+        vy,
+        rumbo: Math.atan2(vy, vx),
+        posarse: i < 2,
+      });
+    }
+  };
+  // El aire de cambiar de pestaña: sopla hacia el lado contrario al paso.
+  parar.soplar = (direccion) => {
+    viento = Math.max(-2.8, Math.min(2.8, viento - direccion * 1.4));
+    mariposas.forEach((m) => { if (!m.posada) m.vx -= direccion * 0.8; });
+  };
+  // Alguien tocó un banderín: la monarca que estaba ahí se va.
+  parar.espantar = (punto) => {
+    if (!punto) return;
+    mariposas.forEach((m) => {
+      if (m.posada && m.meta && Math.abs(m.meta.x - punto.x) < 20 && Math.abs(m.meta.y - punto.y) < 20) despegar(m);
+    });
+  };
+  return parar;
+}
+
+/**
+ * Sacude el papel picado: una onda que corre por la cuerda. Desde un
+ * banderín (`desde`: su índice), la onda pierde fuerza hacia los lados,
+ * como cuando alguien jala uno; desde una punta (`'start'` | `'end'`), es
+ * el viento que entra por ese lado. Va en su propia variable (--pp-toque),
+ * que se SUMA a la respiración y a la ráfaga: no las pisa.
+ */
+export function sacudirPapelPicado(fila, { desde = 'start', fuerza = 9, signo = 1 } = {}) {
+  if (!fila || reducido()) return;
+  const banderines = Array.from(fila.querySelectorAll('.pp-banderin'));
+  if (!banderines.length) return;
+  const centro = typeof desde === 'number' ? desde : desde === 'end' ? banderines.length - 1 : 0;
+  const amplitud = (i) => signo * fuerza * (typeof desde === 'number' ? Math.max(0.2, 1 - Math.abs(i - centro) * 0.3) : 1);
+  gsap.killTweensOf(banderines, '--pp-toque');
+  gsap.timeline()
+    .to(banderines, {
+      '--pp-toque': (i) => `${amplitud(i).toFixed(2)}deg`, duration: 0.22, ease: 'power2.out', stagger: { each: 0.05, from: centro },
+    })
+    .to(banderines, {
+      '--pp-toque': '0deg', duration: 1.7, ease: 'elastic.out(1, 0.32)', stagger: { each: 0.05, from: centro },
+    }, 0.24);
+}
+
+/**
+ * La luz de las veladoras al pie de la pantalla: titila como flama, nunca
+ * igual dos veces. Crece desde abajo, que es de donde sale la luz.
+ */
+export function encenderVeladora(el) {
+  if (!el || reducido()) return undefined;
+  gsap.set(el, { transformOrigin: '50% 100%' });
+  const titileo = gsap.to(el, {
+    opacity: () => azarT(0.7, 1),
+    scaleY: () => azarT(0.95, 1.06),
+    duration: () => azarT(0.09, 0.32),
+    ease: 'sine.inOut',
+    repeat: -1,
+    repeatRefresh: true,
+  });
+  return ahorrarEnSegundoPlano(titileo);
 }
