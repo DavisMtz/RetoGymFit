@@ -6,11 +6,19 @@ import InstalarBanner from './components/InstalarBanner';
 import CorreoBanner from './components/CorreoBanner';
 import PapelPicado from './components/PapelPicado';
 import PatrioBienvenida from './components/PatrioBienvenida';
+import NocheDeLuna from './components/NocheDeLuna';
+import DiaDeMuertos from './components/DiaDeMuertos';
+import TemporadaBienvenida from './components/TemporadaBienvenida';
 import AvisoFotos from './components/AvisoFotos';
 import { drenarCola } from './lib/sheets';
 import { alRecibirPush } from './lib/push';
 import { entradaPagina } from './lib/anim';
 import { vigilarPatrio, apagarPatrio, suscribirPatrio, yaVioBienvenida } from './lib/patrio';
+import {
+  vigilarTemporada, apagarTemporada, suscribirTemporada, yaVioBienvenida as yaEligioTemporada,
+} from './lib/temporada';
+import { esNocheDeBrujas, esDiaDeMuertos } from './config/temporada';
+import { hoyMX } from './lib/dates';
 import Onboarding from './screens/Onboarding';
 import Hoy from './screens/Hoy';
 import Feed from './screens/Feed';
@@ -73,6 +81,9 @@ function Shell() {
   const [patrio, setPatrio] = useState(false);        // ¿tema patrio encendido?
   const [bienvenida, setBienvenida] = useState(false); // ¿toca el modal de una vez?
   const [guirnalda, setGuirnalda] = useState(false);   // ¿sigue montado el papel picado?
+  const [temporada, setTemporada] = useState(null);     // 'brujas' | 'muertos' | null: lo que se ve
+  const [escena, setEscena] = useState(null);           // la escena montada (puede ir saliendo)
+  const [eligeTemporada, setEligeTemporada] = useState(false); // ¿toca el modal para elegir?
 
   // El tema patrio es CSS (html[data-patrio]) MÁS lo que React monta aparte:
   // la guirnalda de papel picado. Esta suscripción mantiene juntas a las dos
@@ -105,6 +116,32 @@ function Shell() {
     const t = setTimeout(() => setGuirnalda(false), 720);
     return () => clearTimeout(t);
   }, [patrio, guirnalda]);
+
+  // Temporada de brujas y muertos: la misma idea del tema patrio, con una
+  // vuelta más. Aquí no hay dos estados (puesto/quitado) sino tres —brujas,
+  // muertos o nada— y pasar de una variante a la otra tiene que DESCOLGAR la
+  // escena que se va antes de montar la que llega. `temporada` es lo que se
+  // ve (lo mueve solo la suscripción); `escena` es lo que está montado.
+  useEffect(() => suscribirTemporada(setTemporada), []);
+
+  useEffect(() => {
+    if (!autenticado || esAdmin || !reto) { apagarTemporada(); return undefined; }
+    return vigilarTemporada(reto.id);
+  }, [autenticado, esAdmin, reto]);
+
+  useEffect(() => {
+    if (temporada && !yaEligioTemporada()) setEligeTemporada(true);
+  }, [temporada]);
+
+  // La escena que se va se queda 720 ms para irse con su animación; el
+  // temporizador la cambia pase lo que pase. Si alguien vuelve a elegirla
+  // antes de que se vaya, se cancela y la escena regresa sin desmontarse.
+  useEffect(() => {
+    if (temporada === escena) return undefined;
+    if (!escena) { setEscena(temporada); return undefined; }
+    const t = setTimeout(() => setEscena(temporada), 720);
+    return () => clearTimeout(t);
+  }, [temporada, escena]);
 
   // Transición de página con GSAP: cascada de los bloques de la pantalla,
   // entrando por el lado del que vienes.
@@ -190,6 +227,9 @@ function Shell() {
       </div>
       {guirnalda && <PapelPicado saliendo={!patrio} />}
       {bienvenida && <PatrioBienvenida onCerrar={() => setBienvenida(false)} />}
+      {escena === 'brujas' && <NocheDeLuna saliendo={temporada !== 'brujas'} noche={esNocheDeBrujas(hoyMX())} />}
+      {escena === 'muertos' && <DiaDeMuertos saliendo={temporada !== 'muertos'} grande={esDiaDeMuertos(hoyMX())} />}
+      {eligeTemporada && <TemporadaBienvenida onCerrar={() => setEligeTemporada(false)} />}
       <InstalarBanner />
       <CorreoBanner />
       <AvisoFotos />

@@ -14,6 +14,10 @@ import { obtenerTema, guardarTema } from '../lib/tema';
 import { obtenerCorreo, guardarCorreo, correoValido } from '../lib/recuperacion';
 import { prefiereePatrio, guardarPreferencia, patrioEncendido, suscribirPatrio, suscribirPatrioGlobal } from '../lib/patrio';
 import { esMesPatrio } from '../config/patrio';
+import {
+  eleccionTemporada, elegirTemporada, temporadaVisible, suscribirTemporada, suscribirTemporadaGlobal,
+} from '../lib/temporada';
+import { esTemporada, varianteDelDia } from '../config/temporada';
 import { silenciarAvisoCorreo } from '../components/CorreoBanner';
 import { calcularRacha, hoyMX, diasDeSemana } from '../lib/dates';
 
@@ -48,6 +52,9 @@ export default function Perfil() {
   const [patrio, setPatrio] = useState(prefiereePatrio);               // tu preferencia
   const [patrioVisible, setPatrioVisible] = useState(patrioEncendido); // lo que se ve
   const [patrioGlobal, setPatrioGlobal] = useState(true);              // el interruptor del admin
+  const [temporadaElegida, setTemporadaElegida] = useState(eleccionTemporada); // 'brujas' | 'muertos' | 'off' | null
+  const [temporadaVis, setTemporadaVis] = useState(temporadaVisible);         // la que se ve
+  const [temporadaGlobal, setTemporadaGlobal] = useState(true);               // el interruptor del admin
 
   // Tu preferencia y lo que de verdad se ve no son lo mismo: el admin puede
   // tener el tema apagado para todo el reto.
@@ -59,6 +66,27 @@ export default function Perfil() {
 
   // Solo se ofrece en septiembre, y solo si el admin no lo apagó para todos.
   const enMesPatrio = esMesPatrio(hoyMX()) && patrioGlobal;
+
+  // Temporada de brujas y muertos: lo mismo que el tema patrio, con tres
+  // opciones en vez de un interruptor. Si el admin la apagó para todos, el
+  // bloque no se ofrece; se escucha en vivo.
+  useEffect(() => suscribirTemporada(setTemporadaVis), []);
+  useEffect(() => suscribirTemporadaGlobal(setTemporadaGlobal), []);
+  const enTemporada = esTemporada(hoyMX()) && temporadaGlobal;
+  // Sin elección propia se marca la que puso la fecha, que es la que ves.
+  const temporadaActual = temporadaElegida === 'off'
+    ? 'off'
+    : temporadaVis || temporadaElegida || varianteDelDia(hoyMX());
+
+  function cambiarTemporada(valor) {
+    if (valor === temporadaActual && temporadaElegida) return;
+    vibrate(15);
+    setTemporadaElegida(valor);
+    const visible = elegirTemporada(valor);
+    if (valor === 'off') toast('Temporada desactivada');
+    else if (!visible) toast('Elegida, pero está apagada para todo el reto');
+    else toast(valor === 'brujas' ? 'Noche de brujas activada' : 'Día de Muertos activado');
+  }
 
   function togglePatrio() {
     vibrate(15);
@@ -333,6 +361,38 @@ export default function Perfil() {
               </span>
             </span>
           </button>
+        )}
+
+        {enTemporada && (
+          <div className="temporada-pref">
+            <div className="tpp-cab">
+              <span className="pr-icon" aria-hidden="true">
+                {temporadaActual === 'brujas' ? '🦇' : temporadaActual === 'muertos' ? '💀' : '🎨'}
+              </span>
+              <span className="pr-text">
+                <span className="pr-title" id="tpp-titulo">Temporada</span>
+                <span className="pr-sub">
+                  {temporadaActual === 'brujas' && 'Luna, niebla y murciélagos hasta el 2 de noviembre'}
+                  {temporadaActual === 'muertos' && 'Papel picado y cempasúchil hasta el 2 de noviembre'}
+                  {temporadaActual === 'off' && 'La app como siempre'}
+                </span>
+              </span>
+            </div>
+            <div className="rank-tabs" role="radiogroup" aria-labelledby="tpp-titulo">
+              {[['brujas', 'Brujas'], ['muertos', 'Muertos'], ['off', 'Apagada']].map(([valor, etiqueta]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  role="radio"
+                  aria-checked={temporadaActual === valor}
+                  className={`rank-tab ${temporadaActual === valor ? 'active' : ''}`}
+                  onClick={() => cambiarTemporada(valor)}
+                >
+                  {etiqueta}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         <button

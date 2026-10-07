@@ -21,6 +21,10 @@
  * y banderines e hilo coinciden sin medir un solo píxel en JavaScript.
  *
  * El vaivén y la entrada los hace GSAP (src/lib/anim.js).
+ *
+ * La misma guirnalda sirve a dos fiestas: el mes patrio (las figuras y
+ * colores de siempre, que son los valores por defecto) y el Día de Muertos
+ * (`FIGURAS_MUERTOS` + los colores de ofrenda de config/temporada.js).
  */
 import { useEffect, useRef, useState } from 'react';
 import { COLORES_PAPEL } from '../config/patrio';
@@ -108,6 +112,58 @@ const VARIANTES = [
   },
 ];
 
+/**
+ * Figuras de ofrenda para el Día de Muertos. En el papel picado de verdad lo
+ * que queda de papel tiene que seguir unido a la hoja —si no, se cae al
+ * picarla—, así que la calavera cuelga de puentes finos dentro de su ventana
+ * y las alas de la mariposa salen del cuerpo. Con `evenodd` cada subtrazado
+ * anidado alterna: ventana (hueco) → calavera (papel) → ojos (hueco).
+ */
+export const FIGURAS_MUERTOS = [
+  // Calavera dentro de su ventana, colgada de cuatro puentes
+  () => `M0,0 H${A} ${bordeZigzag(5)} Z `
+    + 'M10,8 H50 Q52,8 52,10 V68 Q52,70 50,70 H10 Q8,70 8,68 V10 Q8,8 10,8 Z '
+    + 'M15,34 A15,15 0 0 1 45,34 C45,41 42.4,44 39,46 V53 Q39,57 35,57 H25 Q21,57 21,53 V46 C17.6,44 15,41 15,34 Z '
+    + 'M29.2,8 H30.8 V19.1 H29.2 Z M29.2,56.9 H30.8 V70 H29.2 Z '
+    + 'M8,33.2 H15.2 V34.8 H8 Z M44.8,33.2 H52 V34.8 H44.8 Z '
+    + circulo(24, 35, 4.6) + circulo(36, 35, 4.6)
+    + 'M30,40.6 L27.4,45.2 H32.6 Z '
+    + 'M25.6,49 H27 V55 H25.6 Z M29.3,49 H30.7 V55 H29.3 Z M33,49 H34.4 V55 H33 Z '
+    + circulo(A / 2, 74.5, 2),
+  // Cempasúchil: la flor de pétalos apretados, en dos coronas
+  () => {
+    let d = `M0,0 H${A} ${bordeOndas(3)} Z ` + circulo(A / 2, 40, 4.2);
+    for (let i = 0; i < 8; i += 1) {
+      const a = (Math.PI / 4) * i;
+      d += circulo(A / 2 + Math.cos(a) * 10, 40 + Math.sin(a) * 10, 3.5);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const a = (Math.PI / 6) * i + Math.PI / 12;
+      d += circulo(A / 2 + Math.cos(a) * 18.5, 40 + Math.sin(a) * 18.5, 3);
+    }
+    return d + circulo(A / 2, 12, 2.6);
+  },
+  // Vela de la ofrenda con su flama y sus destellos
+  () => `M0,0 H${A} ${bordeZigzag(4)} Z `
+    + 'M30,14 C34,20 35.5,24 35.5,27 C35.5,30.6 33,33 30,33 C27,33 24.5,30.6 24.5,27 C24.5,24 26,20 30,14 Z '
+    + 'M24,38 H36 V64 H24 Z '
+    + 'M17,66 H43 V70.5 H17 Z '
+    + rombo(13, 26, 4) + rombo(A - 13, 26, 4)
+    + circulo(14, 46, 2.4) + circulo(A - 14, 46, 2.4)
+    + circulo(14, 58, 2) + circulo(A - 14, 58, 2),
+  // Mariposa monarca: llegan a Michoacán justo para muertos, y se dice que
+  // son las almas que vuelven
+  () => `M0,0 H${A} ${bordeOndas(4)} Z `
+    + 'M28.6,38 C22,23 9,21.5 9.5,30 C10,37.5 18.5,42 28.6,40.4 Z '
+    + 'M31.4,38 C38,23 51,21.5 50.5,30 C50,37.5 41.5,42 31.4,40.4 Z '
+    + 'M28.6,42.4 C20,42 13.5,48.5 15.6,54.6 C17.8,60 25.4,56.6 28.6,46.6 Z '
+    + 'M31.4,42.4 C40,42 46.5,48.5 44.4,54.6 C42.2,60 34.6,56.6 31.4,46.6 Z '
+    + circulo(15.2, 30, 1.7) + circulo(A - 15.2, 30, 1.7)
+    + circulo(20, 51.5, 1.4) + circulo(A - 20, 51.5, 1.4)
+    + circulo(26.4, 22, 1.5) + circulo(A - 26.4, 22, 1.5)
+    + circulo(A / 2, 70, 2.6),
+];
+
 /** Cuántos banderines caben. Se mide de verdad, no se esconden con CSS: la
  *  comba depende de CUÁNTOS hay, y unos ocultos la dejarían mal calculada. */
 function usarCantidad() {
@@ -125,7 +181,7 @@ function usarCantidad() {
   return angosto ? 7 : 9;
 }
 
-export default function PapelPicado({ saliendo = false }) {
+export default function PapelPicado({ saliendo = false, colores = COLORES_PAPEL, figuras = VARIANTES }) {
   const filaRef = useRef(null);
   const cantidad = usarCantidad();
 
@@ -164,8 +220,8 @@ export default function PapelPicado({ saliendo = false }) {
                 focusable="false"
               >
                 <path
-                  d={VARIANTES[i % VARIANTES.length]()}
-                  fill={COLORES_PAPEL[i % COLORES_PAPEL.length]}
+                  d={figuras[i % figuras.length]()}
+                  fill={colores[i % colores.length]}
                   fillRule="evenodd"
                 />
               </svg>

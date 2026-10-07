@@ -20,6 +20,8 @@ import { sincronizarRegistroAdmin, borrarRegistroSheet } from '../lib/sheets';
 import { hoyMX } from '../lib/dates';
 import { fijarPatrioTodos, vigilarPatrioTodos } from '../lib/patrio';
 import { esMesPatrio } from '../config/patrio';
+import { fijarTemporadaTodos, vigilarTemporadaTodos } from '../lib/temporada';
+import { esTemporada } from '../config/temporada';
 
 const ESTATUS = ['CUMPLE', 'NO CUMPLE', 'JUSTIFICADO'];
 
@@ -131,6 +133,8 @@ export default function Admin() {
   const [enviando, setEnviando] = useState(false);
   const [patrioPorReto, setPatrioPorReto] = useState(null); // { mixto: true, damas: false }
   const [patrioCargando, setPatrioCargando] = useState(false);
+  const [temporadaPorReto, setTemporadaPorReto] = useState(null); // { mixto: true, damas: false }
+  const [temporadaCargando, setTemporadaCargando] = useState(false);
 
   const cargar = useCallback(async () => {
     setUsuarios(null); setPagos(null); setAbierto(null); setHistorial({});
@@ -191,6 +195,31 @@ export default function Admin() {
       toast(`No se pudo cambiar${err?.code ? ` (${err.code})` : ''}. Intenta de nuevo.`, true);
     } finally {
       setPatrioCargando(false);
+    }
+  }
+
+  // Temporada de brujas y muertos: el mismo interruptor único que el tema
+  // patrio (campo `temaTemporada` en cada retos/{retoId}), escuchado en vivo.
+  // Apaga la temporada entera; qué variante ve cada quien lo elige cada uno.
+  useEffect(() => (esTemporada(hoyMX()) ? vigilarTemporadaTodos(setTemporadaPorReto) : undefined), []);
+  const retosTemporada = temporadaPorReto ? Object.entries(temporadaPorReto) : [];
+  const temporadaEnAlguno = retosTemporada.some(([, v]) => v);
+  const temporadaEnTodos = retosTemporada.length > 0 && retosTemporada.every(([, v]) => v);
+  const temporadaAMedias = temporadaEnAlguno && !temporadaEnTodos;
+
+  async function toggleTemporadaGlobal() {
+    if (temporadaCargando || temporadaPorReto === null) return;
+    setTemporadaCargando(true);
+    const nuevo = !temporadaEnAlguno; // si alguien la ve, el botón apaga
+    try {
+      await fijarTemporadaTodos(nuevo);
+      toast(nuevo
+        ? 'Temporada de brujas y muertos activada en todos los retos'
+        : 'Temporada de brujas y muertos apagada en todos los retos');
+    } catch (err) {
+      toast(`No se pudo cambiar${err?.code ? ` (${err.code})` : ''}. Intenta de nuevo.`, true);
+    } finally {
+      setTemporadaCargando(false);
     }
   }
 
@@ -364,6 +393,40 @@ export default function Admin() {
           <div className="st-label">Bote<br />acumulado</div>
         </div>
       </div>
+
+      {esTemporada(hoyMX()) && (
+        <section className="card">
+          <div className="card-head"><h2 className="card-title">Brujas y Muertos</h2></div>
+          <button
+            className="pref-row"
+            type="button"
+            onClick={toggleTemporadaGlobal}
+            disabled={temporadaCargando || temporadaPorReto === null}
+          >
+            <span className="pr-icon">{temporadaEnAlguno ? '🎃' : '🚫'}</span>
+            <span className="pr-text">
+              <span className="pr-title">Temporada · todos los retos</span>
+              <span className="pr-sub">
+                {temporadaPorReto === null && 'Consultando…'}
+                {temporadaPorReto !== null && temporadaCargando && 'Guardando…'}
+                {temporadaPorReto !== null && !temporadaCargando && temporadaEnTodos
+                  && 'Encendida para todos · toca para apagarla a todo el mundo'}
+                {temporadaPorReto !== null && !temporadaCargando && temporadaAMedias
+                  && `A medias (${retosTemporada.filter(([, v]) => v).map(([id]) => getReto(id).nombre).join(', ')} la ve) · toca para apagarla a todos`}
+                {temporadaPorReto !== null && !temporadaCargando && !temporadaEnAlguno
+                  && 'Apagada para todos · nadie la ve, aunque la elijan en su perfil'}
+              </span>
+            </span>
+          </button>
+          {temporadaPorReto !== null && (
+            <div className="admin-nota">
+              Del 1 de octubre al 2 de noviembre. Cada quien elige en su perfil
+              entre noche de brujas y Día de Muertos; este interruptor apaga las dos
+              para {retosTemporada.map(([id]) => getReto(id).nombre).join(' y ')}.
+            </div>
+          )}
+        </section>
+      )}
 
       {esMesPatrio(hoyMX()) && (
         <section className="card">

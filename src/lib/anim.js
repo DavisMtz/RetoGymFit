@@ -973,6 +973,11 @@ export function mecerPapelPicado(fila) {
     }, 0.6)
     .to({}, { duration: () => gsap.utils.random(4, 10) });
 
+  // Avisa que entró aire: los pétalos de cempasúchil (petalosDeCempasuchil)
+  // se dejan llevar por la MISMA ráfaga que mueve la guirnalda. Un evento y
+  // no una importación, para que el papel picado no sepa quién lo escucha.
+  rafaga.call(() => window.dispatchEvent(new Event('rgf-rafaga')), null, 0);
+
   const todas = [...respiracion, rafaga];
   const alCambiarVisibilidad = () => todas.forEach((tl) => (
     document.hidden ? tl.pause() : tl.resume()
@@ -1294,5 +1299,484 @@ export function cohetesDelGrito(canvas, colores) {
     gsap.ticker.remove(tick);
     window.removeEventListener('resize', redimensionar);
     ctx.clearRect(0, 0, ancho, alto);
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMPORADA DE BRUJAS Y MUERTOS — 1 de octubre al 2 de noviembre
+   Dos variantes que elige cada quien (config/temporada.js). Todo lo de
+   aquí pausa con la pantalla apagada y se queda quieto con menos movimiento.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const azarT = (a, b) => a + Math.random() * (b - a);
+
+/** Lienzo a la medida de su caja y nítido en pantallas densas. */
+function lienzoNitido(canvas) {
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const tam = { ancho: 0, alto: 0 };
+  const redimensionar = () => {
+    tam.ancho = canvas.clientWidth;
+    tam.alto = canvas.clientHeight;
+    canvas.width = Math.round(tam.ancho * dpr);
+    canvas.height = Math.round(tam.alto * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  redimensionar();
+  window.addEventListener('resize', redimensionar);
+  return { ctx, tam, soltar: () => window.removeEventListener('resize', redimensionar) };
+}
+
+/* ── Noche de brujas ─────────────────────────────────────────────────── */
+
+/**
+ * Un murciélago visto de frente, dibujado en el origen. `aleteo` va de -1
+ * (alas abajo) a 1 (alas arriba).
+ *
+ * Lo que lo hace leerse como murciélago y no como pájaro: el borde de fuga
+ * del ala va FESTONEADO —la membrana se mete entre dedo y dedo— y en los
+ * extremos del aleteo el ala se acorta, porque se ve en escorzo.
+ */
+function dibujarMurcielago(ctx, s, aleteo) {
+  const alto = -aleteo * s * 0.5;
+  const abre = s * (0.78 + 0.22 * (1 - Math.abs(aleteo)));
+  ctx.beginPath();
+  ctx.ellipse(0, s * 0.02, s * 0.11, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.moveTo(-s * 0.1, -s * 0.08);
+  ctx.lineTo(-s * 0.09, -s * 0.3);
+  ctx.lineTo(-s * 0.02, -s * 0.14);
+  ctx.lineTo(s * 0.02, -s * 0.14);
+  ctx.lineTo(s * 0.09, -s * 0.3);
+  ctx.lineTo(s * 0.1, -s * 0.08);
+  ctx.closePath();
+  [-1, 1].forEach((lado) => {
+    const px = lado * abre;
+    const py = alto;
+    const bx = lado * s * 0.06;
+    const by = s * 0.16;
+    ctx.moveTo(lado * s * 0.08, -s * 0.06);
+    ctx.quadraticCurveTo(lado * abre * 0.5, alto * 0.6 - s * 0.16, px, py);
+    for (let i = 1; i <= 3; i += 1) {
+      const x0 = px + (bx - px) * ((i - 1) / 3);
+      const y0 = py + (by - py) * ((i - 1) / 3);
+      const x1 = px + (bx - px) * (i / 3);
+      const y1 = py + (by - py) * (i / 3);
+      ctx.quadraticCurveTo((x0 + x1) / 2, (y0 + y1) / 2 - s * 0.13, x1, y1);
+    }
+    ctx.closePath();
+  });
+  ctx.fill();
+}
+
+/**
+ * Murciélagos que cruzan la pantalla.
+ *
+ * Cada uno es un pequeño simulador, no una ruta fija:
+ *
+ *   · VUELO ERRÁTICO — corrigen el rumbo a cada rato (el zigzag de un
+ *     murciélago cazando), así que dos vuelos nunca son iguales.
+ *   · EL GOLPE DE ALA ES ASIMÉTRICO — bajan las alas más rápido de lo que
+ *     las suben, y el cuerpo sube con cada golpe. Sin eso aletean como
+ *     mariposa.
+ *   · PLANEAN — de vez en cuando dejan de aletear con las alas abiertas.
+ *   · PROFUNDIDAD — los lejanos son chicos, lentos, más tenues y aletean
+ *     más rápido; los cercanos al revés.
+ *
+ * `noche` (31 de octubre): sale una bandada de la luna y los vuelos se
+ * vuelven frecuentes. `origen` cambia de dónde sale esa bandada.
+ *
+ * El color sale del CSS (`color` del lienzo), así cada tema pone el suyo.
+ * Mientras no vuela ninguno, el lienzo ni se toca. Devuelve la baja.
+ */
+export function vuelosDeMurcielagos(canvas, { noche = false, origen = null } = {}) {
+  if (!canvas || reducido()) return () => {};
+  const { ctx, tam, soltar } = lienzoNitido(canvas);
+  const bandada = [];
+  let sucio = false;
+
+  const nuevo = (op = {}) => {
+    const lado = op.lado ?? (Math.random() < 0.5 ? -1 : 1);
+    const prof = op.prof ?? Math.random();
+    const s = 10 + prof * 16;
+    bandada.push({
+      x: op.x ?? (lado < 0 ? -s * 2 : tam.ancho + s * 2),
+      y: op.y ?? tam.alto * azarT(0.05, 0.42),
+      vx: op.vx ?? -lado * (1.3 + prof * 1.9),
+      vy: op.vy ?? azarT(-0.3, 0.3),
+      s,
+      prof,
+      fase: azarT(0, Math.PI * 2),
+      ritmo: azarT(0.24, 0.32) * (1.3 - prof * 0.45),
+      deriva: azarT(0, 200),
+      planea: 0,
+      t: 0,
+      col: getComputedStyle(canvas).color,
+    });
+  };
+
+  // Un grupito que entra por el mismo lado, con un poco de desorden.
+  const grupo = () => {
+    const lado = Math.random() < 0.5 ? -1 : 1;
+    const y = tam.alto * azarT(0.06, 0.36);
+    const n = noche ? gsap.utils.random(2, 5, 1) : gsap.utils.random(1, 3, 1);
+    for (let i = 0; i < n; i += 1) {
+      nuevo({ lado, y: y + azarT(-40, 40), x: (lado < 0 ? -30 : tam.ancho + 30) - lado * i * azarT(20, 55) });
+    }
+  };
+
+  // La bandada que sale de la luna: hacia abajo y a los lados, en abanico.
+  const estampida = () => {
+    const ox = origen?.x ?? tam.ancho * 0.58;
+    const oy = origen?.y ?? 24;
+    for (let i = 0; i < 16; i += 1) {
+      const ang = azarT(0.12, Math.PI - 0.12);
+      const vel = azarT(1.6, 3.4);
+      nuevo({
+        x: ox + azarT(-12, 12), y: oy + azarT(-6, 6), vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel * 0.55, prof: azarT(0.2, 1),
+      });
+    }
+  };
+
+  const llamadas = [];
+  const programar = (seg, fn) => { llamadas.push(gsap.delayedCall(seg, fn)); };
+  const siguiente = () => {
+    programar(noche ? azarT(3.5, 7) : azarT(9, 18), () => { if (!document.hidden) grupo(); siguiente(); });
+  };
+  if (noche) programar(0.6, estampida);
+  programar(noche ? 2.4 : 2.5, () => { grupo(); siguiente(); });
+
+  const tick = () => {
+    if (document.hidden) return;
+    if (!bandada.length) {
+      if (sucio) { ctx.clearRect(0, 0, tam.ancho, tam.alto); sucio = false; }
+      return;
+    }
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+    sucio = true;
+    for (let i = bandada.length - 1; i >= 0; i -= 1) {
+      const b = bandada[i];
+      b.t += 1;
+      b.vy += Math.sin((b.t + b.deriva) * 0.05) * 0.04 + azarT(-0.025, 0.025);
+      b.vy *= 0.975;
+      if (b.planea > 0) b.planea -= 1;
+      else if (Math.random() < 0.004) b.planea = gsap.utils.random(24, 50, 1);
+      if (!b.planea) b.fase += b.ritmo * (Math.cos(b.fase) < 0 ? 1.35 : 0.78);
+      const aleteo = b.planea ? -0.2 : Math.sin(b.fase);
+      b.x += b.vx;
+      b.y += b.vy;
+      if (b.x < -80 || b.x > tam.ancho + 80 || b.y < -80 || b.y > tam.alto + 80) {
+        bandada.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.translate(b.x, b.y + aleteo * b.s * 0.08);
+      ctx.rotate(Math.max(-0.5, Math.min(0.5, b.vy * 0.22)) + b.vx * 0.02);
+      ctx.globalAlpha = 0.5 + b.prof * 0.45;
+      ctx.fillStyle = b.col;
+      dibujarMurcielago(ctx, b.s, aleteo);
+      ctx.restore();
+    }
+  };
+  gsap.ticker.add(tick);
+
+  return () => {
+    gsap.ticker.remove(tick);
+    llamadas.forEach((c) => c.kill());
+    soltar();
+    bandada.length = 0;
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+  };
+}
+
+/**
+ * La noche entra: la luna sube un poco y aclara, la niebla se asienta y la
+ * telaraña se teje hilo por hilo (primero los radios, luego la espiral, que
+ * es como la teje la araña). Todo parte de lo que ya se ve: si no corre, la
+ * escena simplemente está ahí.
+ */
+export function amanecerNocheDeLuna(raiz) {
+  if (!raiz || sinMovimiento()) return undefined;
+  const tl = gsap.timeline();
+  const luna = raiz.querySelector('.nl-luna');
+  if (luna) tl.from(luna, { y: 26, opacity: 0, duration: 1.6, ease: 'power3.out' }, 0);
+  const nieblas = raiz.querySelectorAll('[data-niebla]');
+  if (nieblas.length) tl.from(nieblas, { opacity: 0, duration: 2, ease: 'power1.out', stagger: 0.3 }, 0.2);
+  const radios = raiz.querySelectorAll('[data-radio]');
+  if (radios.length) tl.from(radios, { drawSVG: 0, duration: 0.7, ease: 'power2.out', stagger: 0.07 }, 0.3);
+  const espiral = raiz.querySelectorAll('[data-espiral]');
+  if (espiral.length) tl.from(espiral, { drawSVG: 0, duration: 0.5, ease: 'power1.inOut', stagger: 0.08 }, '>-0.2');
+  return blindar(tl);
+}
+
+/**
+ * La niebla corre despacio. Cada banda mide el doble de la pantalla y su
+ * dibujo se repite a la mitad, así que recorrerla media vuelta y empezar
+ * otra no deja costura. Sin `filter: blur`: con degradados suaves movidos
+ * por transform ya se lee como niebla, y el desenfoque de una capa fija de
+ * pantalla completa es justo lo que hace tartamudear a un Android de gama
+ * media.
+ */
+export function nieblaNocturna(raiz) {
+  if (!raiz || reducido()) return undefined;
+  const anims = [];
+  raiz.querySelectorAll('[data-niebla]').forEach((banda, i) => {
+    const izq = i % 2 === 0;
+    anims.push(gsap.fromTo(
+      banda,
+      { xPercent: izq ? 0 : -50 },
+      { xPercent: izq ? -50 : 0, duration: Number(banda.dataset.niebla) || 60, ease: 'none', repeat: -1 },
+    ));
+    anims.push(gsap.to(banda, { y: i % 2 ? -7 : 7, duration: 6 + i * 1.7, ease: 'sine.inOut', yoyo: true, repeat: -1 }));
+  });
+  const tela = raiz.querySelector('[data-tela]');
+  // La telaraña respira con el aire: un grado basta.
+  if (tela) anims.push(gsap.to(tela, { rotation: -1, svgOrigin: '160 0', duration: 3.4, ease: 'sine.inOut', yoyo: true, repeat: -1 }));
+  return ahorrarEnSegundoPlano(...anims);
+}
+
+/**
+ * Una araña que baja de su telaraña por el hilo, rebota, se mece y vuelve a
+ * subir a tirones.
+ *
+ * La altura es UNA variable (--caida) que usan el hilo y el cuerpo, así que
+ * los dos nunca se separan. El rebote es el hilo estirándose: baja de más y
+ * regresa con un elástico. La subida va a tirones porque así trepa una
+ * araña de verdad: jala, se detiene, vuelve a jalar.
+ *
+ * Vive en el canal del borde derecho, fuera de las tarjetas y lejos de los
+ * botones de la cabecera.
+ */
+export function bajarArana(arana) {
+  if (!arana || reducido()) return undefined;
+  const patas = arana.querySelectorAll('[data-pata]');
+  // Cinco jalones con pausa entre uno y otro, en una sola curva.
+  const jalon = gsap.parseEase('power2.inOut');
+  const tirones = (t) => {
+    const n = 5;
+    const k = Math.min(Math.floor(t * n), n - 1);
+    const f = t * n - k;
+    return (k + (f < 0.62 ? jalon(f / 0.62) : 1)) / n;
+  };
+
+  // La caída se anima en un objeto y se copia a la variable en cada cuadro:
+  // así los rebotes pueden ser relativos (+=, -=) a una bajada que cambia
+  // de largo en cada vuelta.
+  const hilo = { caida: 0 };
+  const pintar = () => arana.style.setProperty('--caida', `${hilo.caida.toFixed(1)}px`);
+  pintar();
+  gsap.set(arana, { rotation: 0, transformOrigin: '50% 0%' });
+  const tl = gsap.timeline({ repeat: -1, repeatRefresh: true, delay: 2.2, onUpdate: pintar })
+    .to(hilo, { caida: () => Math.round(azarT(110, 200)), duration: 2.6, ease: 'power2.out' })
+    .to(patas, {
+      rotation: (i) => (i % 2 ? 9 : -9), svgOrigin: '12 12', duration: 0.18, ease: 'sine.inOut', yoyo: true, repeat: 5,
+    }, '<0.3')
+    .to(hilo, { caida: '+=14', duration: 0.32, ease: 'sine.out' })
+    .to(hilo, { caida: '-=14', duration: 1.5, ease: 'elastic.out(1, 0.32)' })
+    .to(arana, { rotation: 5, duration: 1, ease: 'sine.inOut' }, '<0.15')
+    .to(arana, { rotation: -3.5, duration: 1.5, ease: 'sine.inOut' })
+    .to(arana, { rotation: 1.8, duration: 1.3, ease: 'sine.inOut' })
+    .to(arana, { rotation: 0, duration: 1.2, ease: 'sine.out' })
+    .to({}, { duration: () => azarT(1.2, 3) })
+    .to(hilo, { caida: 0, duration: 3.4, ease: tirones })
+    .to(patas, {
+      rotation: (i) => (i % 2 ? -12 : 12), svgOrigin: '12 12', duration: 0.12, ease: 'sine.inOut', yoyo: true, repeat: 13,
+    }, '<')
+    .to({}, { duration: () => azarT(7, 16) });
+
+  return ahorrarEnSegundoPlano(tl);
+}
+
+/**
+ * Apaga (o vuelve a encender) los planos de una escena de temporada: todo lo
+ * que lleve `data-capa`. Se usa al cambiar de variante o apagar el tema; si
+ * alguien se arrepiente a media salida, `saliendo = false` la regresa.
+ */
+export function retirarTemporada(raiz, saliendo = true) {
+  if (!raiz) return;
+  const capas = raiz.querySelectorAll('[data-capa]');
+  if (!capas.length) return;
+  if (reducido()) { gsap.set(capas, { opacity: saliendo ? 0 : 1 }); return; }
+  gsap.to(capas, {
+    opacity: saliendo ? 0 : 1, duration: saliendo ? 0.55 : 0.8, ease: saliendo ? 'power2.in' : 'power2.out', overwrite: true,
+  });
+}
+
+/**
+ * La calabaza se enciende como se enciende una vela: el cerillo chispea dos
+ * veces antes de prender, y luego la flama titila sin repetirse nunca igual.
+ * `encendida = false` la apaga. Devuelve la baja del titileo.
+ */
+export function encenderCalabaza(svg, encendida = true) {
+  if (!svg) return undefined;
+  const luz = svg.querySelectorAll('[data-luz]');
+  if (!luz.length) return undefined;
+  if (!encendida) {
+    gsap.to(luz, { opacity: 0, duration: reducido() ? 0 : 0.35, ease: 'power2.out', overwrite: true });
+    return undefined;
+  }
+  if (reducido()) { gsap.set(luz, { opacity: 1 }); return undefined; }
+  const tl = gsap.timeline()
+    .to(luz, { opacity: 0.75, duration: 0.05, overwrite: true })
+    .to(luz, { opacity: 0.08, duration: 0.09 })
+    .to(luz, { opacity: 0.9, duration: 0.05 })
+    .to(luz, { opacity: 0.25, duration: 0.12 })
+    .to(luz, { opacity: 1, duration: 0.4, ease: 'power2.out' });
+  const titileo = gsap.to(luz, {
+    opacity: () => azarT(0.7, 1),
+    duration: () => azarT(0.06, 0.24),
+    ease: 'sine.inOut',
+    repeat: -1,
+    repeatRefresh: true,
+    delay: tl.duration(),
+  });
+  const parar = ahorrarEnSegundoPlano(titileo);
+  return () => { tl.kill(); parar(); };
+}
+
+/**
+ * El cempasúchil abre en espiral: los pétalos se despliegan uno tras otro
+ * alrededor del centro, con un pequeño giro que los acomoda. Cerrado queda
+ * en botón. Abierto, respira. Devuelve la baja de la respiración.
+ */
+export function abrirCempasuchil(svg, abierta = true) {
+  if (!svg) return undefined;
+  const petalos = svg.querySelectorAll('[data-petalo]');
+  const flor = svg.querySelector('[data-flor]');
+  if (!petalos.length) return undefined;
+  gsap.set(petalos, { svgOrigin: '0 0' });
+  if (reducido()) {
+    gsap.set(petalos, { scale: abierta ? 1 : 0.62, rotation: 0 });
+    return undefined;
+  }
+  if (!abierta) {
+    gsap.to(petalos, {
+      scale: 0.62, rotation: -10, duration: 0.5, ease: 'power2.inOut', stagger: { each: 0.004 }, overwrite: true,
+    });
+    return undefined;
+  }
+  const tl = gsap.timeline()
+    .fromTo(petalos, { scale: 0.62, rotation: -18 }, {
+      scale: 1, rotation: 0, duration: 0.85, ease: 'back.out(1.8)', stagger: { each: 0.016 }, overwrite: true,
+    });
+  const respira = flor
+    ? gsap.to(flor, { rotation: 4, svgOrigin: '48 44', duration: 4.5, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1 })
+    : null;
+  const parar = respira ? ahorrarEnSegundoPlano(respira) : () => {};
+  return () => {
+    // Si se cierra a media apertura, que no se quede a medias.
+    if (tl.progress() < 1) tl.progress(1);
+    parar();
+    if (flor) gsap.set(flor, { rotation: 0 });
+  };
+}
+
+/** Entrada de los emblemas del modal: se trazan y luego se rellenan. */
+export function trazarEmblemasTemporada(raiz) {
+  if (!raiz || sinMovimiento()) return undefined;
+  const tl = gsap.timeline();
+  const trazos = raiz.querySelectorAll('[data-trazo]');
+  if (trazos.length) tl.from(trazos, { drawSVG: 0, duration: 0.9, ease: 'power2.inOut', stagger: 0.05 }, 0);
+  const rellenos = raiz.querySelectorAll('[data-relleno]');
+  if (rellenos.length) {
+    tl.from(rellenos, {
+      opacity: 0, scale: 0.86, transformOrigin: '50% 100%', duration: 0.7, ease: 'power3.out', stagger: 0.04,
+    }, 0.25);
+  }
+  return blindar(tl);
+}
+
+/* ── Día de Muertos ──────────────────────────────────────────────────── */
+
+/** Pétalo de cempasúchil: borde rizado arriba, angosto en la base (10×14). */
+const PETALO_CEMPASUCHIL = 'M5 14 C3 11 0 7 0.6 3.2 C1.2 1.2 2.4 0.4 3.2 1.4 C3.8 0.2 4.6 -0.2 5 1 '
+  + 'C5.4 -0.2 6.2 0.2 6.8 1.4 C7.6 0.4 8.8 1.2 9.4 3.2 C10 7 7 11 5 14 Z';
+
+/**
+ * Pétalos de cempasúchil que caen: el camino de flor que se le pone a las
+ * almas para que encuentren la ofrenda.
+ *
+ *   · DAN VUELTAS AL CAER — se aplanan y se abren (escala vertical con el
+ *     coseno de su giro), como un pétalo de verdad que se ve de canto. Es lo
+ *     que separa un pétalo de un confeti.
+ *   · SE MECEN — cada uno con su vaivén y su ritmo.
+ *   · EL VIENTO ES EL MISMO DE LA GUIRNALDA — cuando una ráfaga sacude el
+ *     papel picado (evento 'rgf-rafaga'), los pétalos se van de lado con
+ *     ella. La escena se mueve como una sola cosa, no como dos efectos.
+ *
+ * `abundancia` multiplica cuántos caen a la vez (1 y 2 de noviembre, más).
+ * Devuelve la baja.
+ */
+export function petalosDeCempasuchil(canvas, { abundancia = 1 } = {}) {
+  if (!canvas || reducido() || typeof Path2D === 'undefined') return () => {};
+  const { ctx, tam, soltar } = lienzoNitido(canvas);
+  const forma = new Path2D(PETALO_CEMPASUCHIL);
+  const nervio = new Path2D('M5 12.6 L5 3.6');
+  const COLORES = ['#ffae1a', '#ff8a00', '#ffc23d', '#f97316', '#ff9f1c'];
+  const cuantos = Math.round(10 * abundancia);
+  const petalos = [];
+  let viento = 0;
+
+  const nuevo = (y) => {
+    const prof = Math.random();
+    return {
+      x: azarT(-20, tam.ancho + 20),
+      y,
+      prof,
+      s: 7 + prof * 9,
+      vy: 0.32 + prof * 0.5,
+      giro: azarT(0, Math.PI * 2),
+      vgiro: azarT(-0.025, 0.025),
+      vuelta: azarT(0, Math.PI * 2),
+      vvuelta: azarT(0.018, 0.05),
+      vaiven: azarT(0, Math.PI * 2),
+      vvaiven: azarT(0.008, 0.02),
+      ampl: azarT(0.25, 0.8),
+      col: COLORES[Math.floor(Math.random() * COLORES.length)],
+    };
+  };
+  // Nacen arriba, escalonados: la pantalla se va llenando, no aparece llena.
+  for (let i = 0; i < cuantos; i += 1) petalos.push(nuevo(azarT(-tam.alto * 0.9, -12)));
+
+  const alViento = () => { viento = Math.min(viento + 1.5, 2.6); };
+  window.addEventListener('rgf-rafaga', alViento);
+
+  const tick = () => {
+    if (document.hidden) return;
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+    viento *= 0.984;
+    petalos.forEach((p, i) => {
+      p.vaiven += p.vvaiven;
+      p.vuelta += p.vvuelta;
+      p.giro += p.vgiro + viento * 0.006;
+      p.x += Math.sin(p.vaiven) * p.ampl + viento * (0.5 + p.prof);
+      p.y += p.vy * (0.75 + Math.abs(Math.cos(p.vuelta)) * 0.5);
+      if (p.y > tam.alto + 24 || p.x > tam.ancho + 40 || p.x < -40) {
+        petalos[i] = nuevo(azarT(-60, -14));
+        return;
+      }
+      const escala = p.s / 14;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.giro);
+      ctx.scale(escala, escala * Math.max(0.12, Math.abs(Math.cos(p.vuelta))));
+      ctx.translate(-5, -7);
+      ctx.globalAlpha = 0.6 + p.prof * 0.38;
+      ctx.fillStyle = p.col;
+      ctx.fill(forma);
+      ctx.globalAlpha *= 0.45;
+      ctx.strokeStyle = '#a64b00';
+      ctx.lineWidth = 0.7;
+      ctx.stroke(nervio);
+      ctx.restore();
+    });
+  };
+  gsap.ticker.add(tick);
+
+  return () => {
+    gsap.ticker.remove(tick);
+    window.removeEventListener('rgf-rafaga', alViento);
+    soltar();
+    petalos.length = 0;
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
   };
 }

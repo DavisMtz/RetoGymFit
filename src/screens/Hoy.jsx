@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
-import { coloresCelebracion } from '../lib/patrio';
+import { coloresCelebracion, formasCelebracion } from '../lib/celebracion';
 import { useAuth } from '../context/AuthContext';
 import { useToast, vibrate, Header, StatusStrip, Countdown, WeekDots, getInitials, useCountUp } from '../components/ui';
 import {
@@ -45,9 +45,10 @@ const FRASES = {
 
 function lanzarConfetti(colores) {
   const end = Date.now() + 2200;
+  const formas = formasCelebracion(); // murciélagos o pétalos en temporada
   (function frame() {
-    confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0 }, colors: colores });
-    confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 }, colors: colores });
+    confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0 }, colors: colores, ...formas });
+    confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 }, colors: colores, ...formas });
     if (Date.now() < end) requestAnimationFrame(frame);
   })();
 }

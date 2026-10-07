@@ -21,7 +21,7 @@
 import { doc, getDoc, setDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { hoyMX } from './dates';
-import { esMesPatrio, decidirPatrio, CONFETI_PATRIO } from '../config/patrio';
+import { esMesPatrio, decidirPatrio } from '../config/patrio';
 import { RETOS } from '../config/retos';
 
 const KEY_PREF = 'rgf_patrio_v1';   // 'on' | 'off' — preferencia personal
@@ -206,11 +206,5 @@ export function patrioEncendido() {
   return document.documentElement.dataset.patrio === 'on';
 }
 
-/**
- * Colores para cualquier celebración de la app (confeti al cumplir la meta,
- * billetitos del bote, etc.). En septiembre la fiesta se pone tricolor sin
- * que cada pantalla tenga que saber nada del tema patrio.
- */
-export function coloresCelebracion(base) {
-  return patrioEncendido() ? CONFETI_PATRIO : base;
-}
+// Los colores de celebración viven en lib/celebracion.js, que sabe de todos
+// los temas de temporada a la vez.
